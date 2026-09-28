@@ -20,7 +20,7 @@ cp .dev.vars.example .dev.vars
 แก้ `DATABASE_URL`, `OWNER_EMAIL`, `DEV_AUTH_EMAIL` ใน `.dev.vars` เป็นค่าทดสอบ และเปิด Neon database แล้ว:
 
 ```sh
-bun run db:migrate
+bun run db:migrate:local
 bun run build
 bun run dev:api
 ```

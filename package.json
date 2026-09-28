@@ -13,6 +13,7 @@
     "gen": "wrangler types",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:migrate:local": "bun --env-file=.dev.vars run db:migrate",
     "deploy": "bun run check && bun run test && bun run build && wrangler deploy"
   },
   "dependencies": {
