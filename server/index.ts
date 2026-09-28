@@ -1,25 +1,22 @@
 import { env } from 'cloudflare:workers';
 import { httpServerHandler } from 'cloudflare:node';
-import express, { type ErrorRequestHandler } from 'express';
+import express from 'express';
 import { and, desc, eq } from 'drizzle-orm';
-import { ZodError, z } from 'zod';
+import { z } from 'zod';
 import { getDb } from './db';
 import { harvests, hives, inspections, staff } from './db/schema';
 import { getStaff, type AppEnv, type StaffSession } from './auth';
 import { harvestInput, hiveInput, hiveUpdate, inspectionInput, teamInput } from './validation';
+import { handleError, HttpError, jsonBody, photoBody } from './http';
 
 const bindings = env as AppEnv;
 const app = express();
 app.disable('x-powered-by');
-app.use(express.json({ limit: '64kb' }));
+app.use(jsonBody);
 
 function database() {
   if (!bindings.DATABASE_URL) throw new HttpError(503, 'ฐานข้อมูลยังไม่พร้อมใช้งาน');
   return getDb(bindings.DATABASE_URL);
-}
-
-class HttpError extends Error {
-  constructor(public status: number, message: string) { super(message); }
 }
 
 function session(res: express.Response): StaffSession {
@@ -90,7 +87,7 @@ app.post('/api/inspections', async (req, res) => {
   res.status(201).json(record);
 });
 
-app.put('/api/inspections/:id/photo', express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: '2mb' }), async (req, res) => {
+app.put('/api/inspections/:id/photo', photoBody, async (req, res) => {
   const id = z.uuid().parse(req.params.id);
   const mime = req.get('Content-Type')?.split(';')[0];
   if (!mime || !['image/jpeg', 'image/png', 'image/webp'].includes(mime) || !Buffer.isBuffer(req.body) || req.body.length === 0) {
@@ -140,13 +137,6 @@ app.patch('/api/team/:email', async (req, res) => {
   res.json(member);
 });
 
-const handleError: ErrorRequestHandler = (cause: unknown, req, res, _next) => {
-  if (cause instanceof ZodError) return void res.status(400).json({ error: 'ข้อมูลไม่ถูกต้อง', details: cause.issues });
-  if (cause instanceof HttpError) return void res.status(cause.status).json({ error: cause.message });
-  if (cause instanceof Error && 'code' in cause && cause.code === '23505') return void res.status(409).json({ error: 'ข้อมูลนี้มีอยู่แล้ว' });
-  console.error('API request failed', { path: req.path, error: cause });
-  res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบ' });
-};
 app.use(handleError);
 
 app.listen(3000);
