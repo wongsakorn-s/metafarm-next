@@ -10,8 +10,8 @@
 - Worker `metafarm-next` มี secrets `DATABASE_URL`, `OWNER_EMAIL`, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` แล้ว เปิด `workers_dev: true` และคง `preview_urls: false` เป็น **private staging** ที่ `https://metafarm-next.wong-saengsurasak.workers.dev` (ต้องผ่าน Access ก่อนเห็นทุกหน้า)
 - ตรวจแล้วว่า request ไม่ล็อกอินไปยัง `/`, `/admin`, `/api/me`, `/health` และไฟล์ asset ถูกส่งไปหน้า Access; บัญชีเจ้าของเข้า `/admin`, `/api/me` และ `/api/dashboard` ได้
 - หน้าเว็บผู้ชมยังเป็นเนื้อหาตัวอย่าง ต้องยืนยันข้อมูลฟาร์มก่อนเปิดให้คนทั่วไปเข้าชม
-- GitHub Actions ยังรันไม่ได้เพราะ GitHub แจ้งว่า **บัญชีถูกล็อกด้าน billing** (จึง `startup_failure` ก่อนเริ่ม job ไม่ใช่ปัญหาใน workflow) เจ้าของบัญชีต้องแก้ billing ใน GitHub ก่อนจึงจะใช้ปุ่ม `Deploy production` ได้ ระหว่างนี้ใช้ Wrangler จากเครื่องที่ล็อกอินเพื่อตรวจและ deploy หลังผ่านรายการด้านล่าง
-- GitHub repo ยังไม่มี Actions secrets; ก่อนเปิด workflow ต้องตั้ง `NEON_DATABASE_URL`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` ตามขั้นตอนด้านล่าง
+- GitHub billing กลับมาใช้งานได้แล้ว: [CI run #2](https://github.com/wongsakorn-s/metafarm-next/actions/runs/36440871524) บน `main` ผ่านครบ (test 8/8) เมื่อ 28 กันยายน 2026
+- GitHub repo ยังไม่มี Actions secrets; workflow `Deploy production` ยังรันไม่ได้จนกว่าจะตั้ง `NEON_DATABASE_URL`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` และตรวจเป้าหมาย deploy ตามขั้นตอนด้านล่าง
 - **ยังไม่แยก staging ออกจาก production ทั้งหมด:** Worker `metafarm-next` ปัจจุบันยังใช้ Neon branch `production` และ R2 bucket หลัก อย่าใช้ staging ทดสอบการเขียนข้อมูลที่เสี่ยงหรือรัน migration ทดลอง จนกว่าจะสร้าง staging database/bucket/Worker แยกและยืนยันค่า binding
 
 ## ผลทดสอบ private staging (28 กันยายน 2026)
