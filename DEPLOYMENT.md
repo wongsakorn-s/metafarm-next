@@ -41,6 +41,7 @@ Workflow `Deploy production` มีตัวตรวจเป้าหมาย
 - เจ้าของยกเลิกการทดสอบทีมงานเมื่อ 29 กันยายน 2026: ปิดสิทธิ์บัญชี QA ในแอปแล้ว (`active: false`) และถอด policy `MetaFarm staging staff QA` ออกจาก Access app staging แล้ว; ทั้ง staging และ production เหลือ `MetaFarm owner` เพียง policy เดียว รายการทีมงานที่ปิดสิทธิ์และ policy ที่ไม่ได้ผูกแอปยังเก็บไว้โดยไม่ให้สิทธิ์เข้าถึง
 - พักการทดสอบทีมงานจริง ไม่รอการล็อกอินบัญชี QA; ยังไม่ถือว่าทดสอบ role `staff` แบบ end-to-end ผ่าน
 - แก้ API parser errors ให้ไฟล์/JSON เกินขนาดตอบ `413`, JSON ผิดรูปแบบตอบ `400`, encoding ที่ไม่รองรับตอบ `415` พร้อมข้อความ JSON ภาษาไทย และปรับเพดานรูป API เป็น 2,000,000 bytes ให้ตรง frontend; ทดสอบ HTTP parser จริงและตรวจ typecheck/build ผ่าน รวม tests 20/20
+- [Deploy staging #2](https://github.com/wongsakorn-s/metafarm-next/actions/runs/36457223184) ผ่านครบสำหรับ commit `2d0891d`; Worker version `c6d3204d-0fed-4861-9c22-459d7d78d5f0` ใช้ R2 staging และหลัง deploy เจ้าของเข้าแดชบอร์ดได้โดยข้อมูลยังเป็น 0 ทั้งหมด
 
 ## วิธี deploy staging ครั้งถัดไป
 
