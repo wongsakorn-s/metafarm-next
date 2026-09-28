@@ -10,7 +10,7 @@
 - Zero Trust Free เปิดใช้งานแล้ว และ Access app `MetaFarm Next admin` ครอบ hostname `metafarm-next.wong-saengsurasak.workers.dev` ทั้งหมด รวมทั้ง `/admin*` และ `/api/*` ด้วยนโยบายอีเมลเจ้าของ
 - Worker `metafarm-next` มี secrets `DATABASE_URL`, `OWNER_EMAIL`, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` แล้ว เปิด `workers_dev: true` และคง `preview_urls: false` เป็น **private production** ที่ `https://metafarm-next.wong-saengsurasak.workers.dev` (ต้องผ่าน Access ก่อนเห็นทุกหน้า)
 - ตรวจแล้วว่า request ไม่ล็อกอินไปยัง `/`, `/admin`, `/api/me`, `/health` และไฟล์ asset ถูกส่งไปหน้า Access; บัญชีเจ้าของเข้า `/admin`, `/api/me` และ `/api/dashboard` ได้
-- หน้าเว็บผู้ชมยังเป็นเนื้อหาตัวอย่าง ต้องยืนยันข้อมูลฟาร์มก่อนเปิดให้คนทั่วไปเข้าชม
+- หน้าเว็บผู้ชมย้ายเนื้อหาจากโปรเจกต์เดิมแล้ว แต่ยังต้องให้เจ้าของยืนยันข้อมูลและสิทธิ์สื่อก่อนเปิดให้คนทั่วไปเข้าชม
 - GitHub billing กลับมาใช้งานได้แล้ว: [CI run #2](https://github.com/wongsakorn-s/metafarm-next/actions/runs/36440871524) บน `main` ผ่านครบ (test 8/8) เมื่อ 28 กันยายน 2026
 - GitHub Environment `production` จำกัดให้ deploy จาก branch `main` เท่านั้น (ไม่อนุญาต tag) และมี environment secrets `NEON_DATABASE_URL`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` ครบแล้ว โดยใช้ credentials ของ production แยกจาก staging
 - Cloudflare token `metafarm-next-production-github-actions` จำกัด `Individual Workers Editor` เฉพาะ Worker `metafarm-next` และหมดอายุ 29 กันยายน 2027
@@ -65,7 +65,10 @@ Workflow `Deploy production` มีตัวตรวจเป้าหมาย
 
 ## เปิดหน้าเว็บให้คนทั่วไปเมื่อพร้อม
 
-1. แทนข้อมูลตัวอย่างบนหน้าเว็บด้วยข้อมูลฟาร์มที่ยืนยันแล้ว และตรวจว่ารูป/ข้อความที่เผยแพร่ได้ไม่มีข้อมูลส่วนตัว
+1. หน้าเว็บสาธารณะ 7 หน้าใช้โครงหน้าและเนื้อหาจาก `metafarm-management-app` แล้ว โดยออกแบบ UI ใหม่; ก่อนเปิดจริง เจ้าของต้องยืนยันข้อมูลฟาร์ม (พื้นที่ 50 ไร่, ที่ตั้ง, ปีเริ่มเลี้ยง), สิทธิ์รูป/วิดีโอ และข้อความด้านคุณค่าของน้ำผึ้ง/ชันโรงอีกครั้ง
+   - `/product`, `/training`, `/pocketbook` ยังคงเป็นหน้ารอเนื้อหาเหมือนระบบเดิม; เบอร์โทร อีเมล และ Facebook บน `/contact` ยังเป็น “รออัปเดต”
+   - ใช้โลโก้ รูปชันโรง `Picture2`/`Picture3` และวิดีโอจากโปรเจกต์เดิม (บีบอัดและตัดขอบดำแล้ว); ไม่ใช้ `Picture1` เป็นภาพชันโรง เพราะไฟล์นั้นเป็นภาพไดโนเสาร์/ภาพประกอบ ไม่ใช่ภาพฟาร์ม
+   - ยังไม่ได้ย้ายฟีเจอร์หลังบ้านเดิมที่อยู่นอก MVP เช่น QR scanner/print, หน้ารายละเอียดรัง และ weather dashboard; ต้องวางแผน data model และสิทธิ์แยกก่อนเพิ่ม
 2. ใน Access app เอา destination ที่ครอบ hostname ทั้งหมดออก **หลังจาก** ยืนยันข้อมูลหน้าเว็บแล้ว โดยคง destination `/admin*` และ `/api/*` พร้อมนโยบายอีเมลเจ้าของไว้ หากเพิ่ม custom domain ต้องเพิ่ม hostname/path ใหม่ใน Access ก่อนเปิดใช้งาน
 3. ทดสอบ `bun run check`, `bun run test`, `bun run build` และตรวจ migration/backups ของ Neon
 4. ทดสอบ `/` แบบไม่ล็อกอิน, `/admin` แบบล็อกอิน, `/api/me` ทั้งบัญชีที่อนุญาตและไม่อนุญาต, CRUD และอัปโหลด/อ่านรูป R2 จริง ก่อนประกาศ URL ให้ผู้ชม
@@ -87,6 +90,6 @@ Workflow `Deploy production` มีตัวตรวจเป้าหมาย
 - Neon Free มีโควตา compute และ storage; เมื่อ idle อาจ scale to zero ทำให้ request แรกช้าขึ้น
 - หน้าเว็บผู้ชมเป็น React SPA (static) ขณะนี้ยังอยู่หลัง Access ทั้งหมด; เมื่อเปิดสาธารณะจะใช้งานได้โดยไม่ล็อกอิน แต่ถ้าต้องการ SEO ระดับสูงควรเพิ่ม prerender/SSR ในระยะต่อไป
 - รูปใน R2 ไม่เปิด public; อ่านผ่าน API หลังตรวจ Access JWT และ role เท่านั้น
-- หน้า public ยังเป็นตัวอย่าง ห้ามเผยแพร่เป็นเว็บไซต์ทางการก่อนแก้ข้อมูลจริง
+- หน้า public ใช้เนื้อหาจากโปรเจกต์เดิมแล้ว แต่ข้อมูลจริง/ข้อความสุขภาพ/สิทธิ์สื่อยังต้องตรวจรับก่อนเผยแพร่เป็นเว็บไซต์ทางการ
 - ไม่มีการย้ายข้อมูลจากระบบเดิม ต้องวางแผนและทดสอบแยกต่างหาก
 - ก่อน migration ที่เปลี่ยน schema ใน production ให้สำรองฐานข้อมูลและมีแผน rollback
