@@ -12,8 +12,10 @@
 - ตรวจแล้วว่า request ไม่ล็อกอินไปยัง `/`, `/admin`, `/api/me`, `/health` และไฟล์ asset ถูกส่งไปหน้า Access; บัญชีเจ้าของเข้า `/admin`, `/api/me` และ `/api/dashboard` ได้
 - หน้าเว็บผู้ชมยังเป็นเนื้อหาตัวอย่าง ต้องยืนยันข้อมูลฟาร์มก่อนเปิดให้คนทั่วไปเข้าชม
 - GitHub billing กลับมาใช้งานได้แล้ว: [CI run #2](https://github.com/wongsakorn-s/metafarm-next/actions/runs/36440871524) บน `main` ผ่านครบ (test 8/8) เมื่อ 28 กันยายน 2026
-- GitHub repo ยังไม่มี Actions secrets; workflow `Deploy production` ยังรันไม่ได้จนกว่าจะตั้ง `NEON_DATABASE_URL`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` และตรวจเป้าหมาย deploy ตามขั้นตอนด้านล่าง
-- GitHub Environment `staging` สร้างแล้ว แต่ยังไม่ได้จำกัด branch และยังไม่มี environment secrets
+- GitHub Environment `production` ยังต้องตั้ง secrets ของ production แยกต่างหากก่อนใช้ workflow `Deploy production`; ห้ามนำ credentials ของ staging มาใช้แทน
+- GitHub Environment `staging` จำกัดให้ deploy จาก branch `main` เท่านั้น (ไม่อนุญาต tag) และมี environment secrets `NEON_DATABASE_URL`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` ครบแล้ว
+- Cloudflare token `metafarm-next-staging-github-actions` จำกัด `Individual Workers Editor` เฉพาะ Worker `metafarm-next-staging` และหมดอายุ 29 กันยายน 2027
+- [Deploy staging #1](https://github.com/wongsakorn-s/metafarm-next/actions/runs/36454418704) ผ่านครบ: typecheck, tests 13/13, ตรวจเป้าหมาย, migrate, build และ deploy commit `c38af8e`; Worker version `73d3e444-c80b-45d3-855f-f85d8e488073`
 - Worker เดิม `metafarm-next` ยังใช้ Neon branch `production` และ R2 bucket หลัก จึงห้ามใช้ Worker เดิมทดสอบการเขียนข้อมูลที่เสี่ยงหรือรัน migration ทดลอง; ใช้ Worker `metafarm-next-staging` ที่แยก Neon branch และ R2 bucket แล้ว
 - แยก Access app `MetaFarm Next staging` ออกจาก `MetaFarm Next admin` แล้ว เพราะการรวมสอง hostname ใน app เดิมทำให้ callback หลังล็อกอินกลับไป hostname ผิด; app staging ครอบทั้ง hostname โดยใช้ policy `MetaFarm owner` เดิม และ Worker staging ใช้ AUD ใหม่
 - ตรวจแล้วว่า request ไม่ล็อกอินไปยัง `/`, `/admin`, `/api/me`, `/health`, `/icon.svg` ถูกส่งไป Access (`302`); บัญชีเจ้าของเปิด `/admin` ได้ และ `/api/me` ตอบ `role: owner`
@@ -23,10 +25,27 @@
 1. ~~แยก Cloudflare Access app สำหรับ staging และใช้ policy `MetaFarm owner` เดิม~~ — เสร็จแล้ว
 2. ~~ตั้ง Worker staging secrets และ AUD ของ app ใหม่ โดยไม่ตั้ง `DEV_AUTH_EMAIL`~~ — เสร็จแล้ว
 3. ~~เปิด `workers_dev` และทดสอบ Access/บัญชีเจ้าของ~~ — เสร็จแล้ว
-4. จำกัด GitHub Environment `staging` ให้ deploy จาก `main` เท่านั้น แล้วตั้ง secrets `NEON_DATABASE_URL` (branch staging), `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` ให้ครบ ก่อนสั่ง workflow `Deploy staging` ซึ่งตรวจ hostname Neon, Worker name และ R2 bucket อัตโนมัติก่อน migrate/deploy
+4. ~~จำกัด GitHub Environment `staging` ให้ deploy จาก `main` เท่านั้น ตั้ง environment secrets และรัน workflow `Deploy staging`~~ — เสร็จแล้ว; workflow ตรวจ hostname Neon, Worker name และ R2 bucket อัตโนมัติก่อน migrate/deploy
 5. ทดสอบบัญชีทีมงานจริง รวมถึงการอัปโหลด/อ่านรูปใน bucket staging และยืนยันว่าข้อมูล production ไม่เปลี่ยน
 
 Workflow `Deploy production` มีตัวตรวจเป้าหมาย production เช่นกัน แต่ยังไม่ควรรันจนกว่าจะกำหนด production environment/secrets และผ่านการเปิดตัวเว็บสาธารณะตามรายการด้านล่าง
+
+## ผลทดสอบ isolated staging หลัง GitHub Actions deploy
+
+- Deploy staging #1 ผ่านเมื่อ 28 กันยายน 2026; ใช้ Neon branch `staging` และ R2 bucket `metafarm-next-media-staging` ตามตัวตรวจเป้าหมายใน workflow
+- หลัง deploy บัญชีเจ้าของเปิดหลังบ้านได้ และเพิ่ม/แก้ไขรัง บันทึกผลผลิต 25 มล./พรอพอลิส 3 กรัม และบันทึกการตรวจผ่าน UI ได้
+- Request ไม่ล็อกอินไปยัง `/`, `/admin`, `/api/me`, `/api/dashboard`, `/health`, `/icon.svg` ตอบ `302` ไป Cloudflare Access
+- ระหว่างมีข้อมูล QA ใน staging แดชบอร์ด production ยังแสดงรัง/ผลผลิต/การตรวจเป็น 0 ทั้งหมด
+- ล้างข้อมูล QA เฉพาะที่สร้างในรอบนี้แล้ว (รัง 1, ผลผลิต 1, การตรวจ 1); ตรวจแดชบอร์ด staging หลังโหลดใหม่กลับเป็น 0 ทั้งหมด และไม่มีไฟล์ QA ถูกอัปโหลดไป R2 ในรอบนี้
+- การแนบรูปผ่าน UI ยังติดข้อจำกัด Chrome extension: ต้องเปิด **Allow access to file URLs** ในรายละเอียด extension ChatGPT ก่อนจึงเลือกไฟล์ QA ได้; ยังไม่ถือว่าทดสอบอัปโหลดรูปบน isolated staging ผ่าน
+- การทดสอบทีมงานจริงยังต้องมีอีเมลทีมงานที่เจ้าของระบุ และให้บัญชีนั้นล็อกอินผ่าน Access; การทดสอบ role จำลองก่อนหน้านี้ไม่แทนการทดสอบนี้
+
+## วิธี deploy staging ครั้งถัดไป
+
+1. Push โค้ดที่ผ่านการตรวจไป `main`
+2. เปิด Actions → **Deploy staging** → **Run workflow** → เลือก `main`
+3. รอทุกขั้นตอนสำเร็จ แล้วเปิด URL staging ผ่าน Access เพื่อตรวจฟีเจอร์ที่เปลี่ยน
+4. หาก workflow ล้มเหลว ให้แก้สาเหตุจาก step ที่ล้มเหลวก่อนรันใหม่; ห้ามสลับไปใช้ production secrets เพื่อแก้ปัญหา staging
 
 ## ผลทดสอบ private staging (28 กันยายน 2026)
 
