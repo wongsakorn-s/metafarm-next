@@ -5,15 +5,15 @@
   "type": "module",
   "scripts": {
     "dev:web": "vite --host 127.0.0.1",
-    "dev:api": "wrangler dev --port 8787",
+    "dev:api": "bun --env-file=.dev.vars scripts/verify-development-db.ts && wrangler dev --port 8787",
     "build": "vite build",
-    "preview": "wrangler dev --port 4173",
+    "preview": "bun --env-file=.dev.vars scripts/verify-development-db.ts && wrangler dev --port 4173",
     "check": "tsc --noEmit",
     "test": "vitest run",
     "gen": "wrangler types",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:migrate:local": "bun --env-file=.dev.vars run db:migrate",
+    "db:migrate:local": "bun --env-file=.dev.vars scripts/verify-development-db.ts && bun --env-file=.dev.vars run db:migrate",
     "deploy": "bun run check && bun run test && bun run build && wrangler deploy"
   },
   "dependencies": {

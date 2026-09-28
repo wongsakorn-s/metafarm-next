@@ -17,7 +17,7 @@ bun install
 cp .dev.vars.example .dev.vars
 ```
 
-แก้ `DATABASE_URL`, `OWNER_EMAIL`, `DEV_AUTH_EMAIL` ใน `.dev.vars` เป็นค่าทดสอบ และเปิด Neon database แล้ว:
+แก้ `DATABASE_URL`, `OWNER_EMAIL`, `DEV_AUTH_EMAIL` ใน `.dev.vars` ให้ใช้บัญชีทดสอบ โดย `DATABASE_URL` ต้องชี้ Neon branch `development` ของโปรเจกต์นี้เท่านั้น (ดู hostname ตัวอย่างใน `.dev.vars.example`) คำสั่ง local จะตรวจ hostname ก่อนรันเพื่อป้องกันการใช้ฐาน production โดยไม่ตั้งใจ:
 
 ```sh
 bun run db:migrate:local
@@ -26,6 +26,8 @@ bun run dev:api
 ```
 
 เปิดอีก terminal แล้วรัน `bun run dev:web` เว็บอยู่ที่ `http://127.0.0.1:5173` และ proxy API ไป `http://127.0.0.1:8787` การข้าม Access ด้วย `DEV_AUTH_EMAIL` ทำงานเฉพาะ localhost เมื่อยังไม่มี `ACCESS_AUD` เท่านั้น ห้ามกำหนดตัวแปรนี้ใน production
+
+Neon branch `development` ที่ใช้ในโปรเจกต์นี้สร้างแบบ **schema only** และบันทึก baseline ของ migration แรกไว้แล้ว จึงรัน `db:migrate:local` ต่อได้ตามปกติ หากสร้าง branch schema-only ใหม่ อย่ารัน migration ทันทีโดยไม่ตรวจประวัติ `drizzle.__drizzle_migrations` เพราะอาจพยายามสร้างตารางที่มีอยู่แล้ว
 
 ตรวจคุณภาพ:
 
