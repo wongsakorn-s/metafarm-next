@@ -26,13 +26,13 @@ export function AdminPage() {
   const refresh = useCallback(async () => setData(await api<Dashboard>('/dashboard')), []);
   useEffect(() => { refresh().catch((cause: Error) => setNotice(cause.message)); }, [refresh]);
 
-  async function submit(event: FormEvent<HTMLFormElement>, action: () => Promise<unknown>) {
+  async function submit(event: FormEvent<HTMLFormElement>, action: () => Promise<unknown>, resetAfter = true) {
     event.preventDefault();
     const form = event.currentTarget;
     setBusy(true);
     setNotice('');
-    try { await action(); await refresh(); setNotice('บันทึกข้อมูลแล้ว'); form.reset(); }
-    catch (cause) { setNotice(cause instanceof Error ? cause.message : 'บันทึกไม่สำเร็จ'); }
+    try { await action(); await refresh(); setNotice('บันทึกข้อมูลแล้ว'); if (resetAfter) form.reset(); }
+    catch (cause) { await refresh().catch(() => undefined); setNotice(cause instanceof Error ? cause.message : 'บันทึกไม่สำเร็จ'); }
     finally { setBusy(false); }
   }
 
@@ -48,7 +48,7 @@ export function AdminPage() {
 
   async function updateHive(event: FormEvent<HTMLFormElement>, hive: Hive) {
     const form = event.currentTarget;
-    await submit(event, () => api(`/hives/${hive.id}`, { method: 'PATCH', body: JSON.stringify(Object.fromEntries(new FormData(form))) }));
+    await submit(event, () => api(`/hives/${hive.id}`, { method: 'PATCH', body: JSON.stringify(Object.fromEntries(new FormData(form))) }), false);
   }
 
   async function createHarvest(event: FormEvent<HTMLFormElement>) {
