@@ -2,7 +2,7 @@
 
 การ deploy frontend และ Express API จบใน Cloudflare Workers ครั้งเดียว โดยใช้ Neon PostgreSQL เป็นฐานข้อมูลภายนอก หลังเตรียม Neon, R2, Access และ secrets ครั้งแรกแล้ว GitHub Actions `Deploy production` จะตรวจโค้ด → ทดสอบ → migrate PostgreSQL → build → deploy ใน workflow เดียว
 
-## สถานะการเตรียมระบบ (28 กันยายน 2026)
+## สถานะการเตรียมระบบ (29 กันยายน 2026)
 
 - Neon schema ถูก migrate แล้ว; R2 bucket `metafarm-next-media` ถูกสร้างแล้ว
 - สร้าง Neon branch `staging` แบบ schema-only พร้อม migration baseline และ R2 bucket `metafarm-next-media-staging` แล้ว; Worker `metafarm-next-staging` เปิด route ที่ `https://metafarm-next-staging.wong-saengsurasak.workers.dev` และมี secrets `DATABASE_URL`, `OWNER_EMAIL`, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` ครบแล้ว
@@ -26,7 +26,7 @@
 2. ~~ตั้ง Worker staging secrets และ AUD ของ app ใหม่ โดยไม่ตั้ง `DEV_AUTH_EMAIL`~~ — เสร็จแล้ว
 3. ~~เปิด `workers_dev` และทดสอบ Access/บัญชีเจ้าของ~~ — เสร็จแล้ว
 4. ~~จำกัด GitHub Environment `staging` ให้ deploy จาก `main` เท่านั้น ตั้ง environment secrets และรัน workflow `Deploy staging`~~ — เสร็จแล้ว; workflow ตรวจ hostname Neon, Worker name และ R2 bucket อัตโนมัติก่อน migrate/deploy
-5. ทดสอบการอัปโหลด/อ่านรูปใน bucket staging และยืนยันว่าข้อมูล production ไม่เปลี่ยน; การทดสอบบัญชีทีมงานจริงพักไว้ตามคำขอเจ้าของเมื่อ 29 กันยายน 2026
+5. ~~ทดสอบการอัปโหลด/อ่านรูปใน bucket staging~~ — ผ่านเมื่อ 29 กันยายน 2026; การทดสอบบัญชีทีมงานจริงพักไว้ตามคำขอเจ้าของ
 
 Workflow `Deploy production` มีตัวตรวจเป้าหมาย production เช่นกัน แต่ยังไม่ควรรันจนกว่าจะกำหนด production environment/secrets และผ่านการเปิดตัวเว็บสาธารณะตามรายการด้านล่าง
 
@@ -37,7 +37,8 @@ Workflow `Deploy production` มีตัวตรวจเป้าหมาย
 - Request ไม่ล็อกอินไปยัง `/`, `/admin`, `/api/me`, `/api/dashboard`, `/health`, `/icon.svg` ตอบ `302` ไป Cloudflare Access
 - ระหว่างมีข้อมูล QA ใน staging แดชบอร์ด production ยังแสดงรัง/ผลผลิต/การตรวจเป็น 0 ทั้งหมด
 - ล้างข้อมูล QA เฉพาะที่สร้างในรอบนี้แล้ว (รัง 1, ผลผลิต 1, การตรวจ 1); ตรวจแดชบอร์ด staging หลังโหลดใหม่กลับเป็น 0 ทั้งหมด และไม่มีไฟล์ QA ถูกอัปโหลดไป R2 ในรอบนี้
-- การแนบรูปผ่าน UI ยังติดข้อจำกัด Chrome extension: ต้องเปิด **Allow access to file URLs** ในรายละเอียด extension ChatGPT ก่อนจึงเลือกไฟล์ QA ได้; ยังไม่ถือว่าทดสอบอัปโหลดรูปบน isolated staging ผ่าน
+- หลังเปิด **Allow access to file URLs** ใน Chrome extension แล้ว เจ้าของสร้างรังและบันทึกการตรวจพร้อมแนบ JPEG 1.38 MB ผ่านหน้า `/admin` บน isolated staging ได้; เปิดรูปผ่าน `/api/inspections/:id/photo` แล้วเบราว์เซอร์แสดงภาพ 3840×2400 จริง และตรวจพบไฟล์ `image/jpeg` ขนาด 1.38 MB ใน R2 bucket `metafarm-next-media-staging`
+- ลบออบเจ็กต์ QA ใน R2 และลบรัง/บันทึกการตรวจ QA ที่ระบุ UUID ตรงกันจาก Neon branch `staging` แล้ว; ตรวจว่าโฟลเดอร์ R2 ว่าง และแดชบอร์ด staging กลับเป็นรัง 0 / การตรวจ 0
 - เจ้าของยกเลิกการทดสอบทีมงานเมื่อ 29 กันยายน 2026: ปิดสิทธิ์บัญชี QA ในแอปแล้ว (`active: false`) และถอด policy `MetaFarm staging staff QA` ออกจาก Access app staging แล้ว; ทั้ง staging และ production เหลือ `MetaFarm owner` เพียง policy เดียว รายการทีมงานที่ปิดสิทธิ์และ policy ที่ไม่ได้ผูกแอปยังเก็บไว้โดยไม่ให้สิทธิ์เข้าถึง
 - พักการทดสอบทีมงานจริง ไม่รอการล็อกอินบัญชี QA; ยังไม่ถือว่าทดสอบ role `staff` แบบ end-to-end ผ่าน
 - แก้ API parser errors ให้ไฟล์/JSON เกินขนาดตอบ `413`, JSON ผิดรูปแบบตอบ `400`, encoding ที่ไม่รองรับตอบ `415` พร้อมข้อความ JSON ภาษาไทย และปรับเพดานรูป API เป็น 2,000,000 bytes ให้ตรง frontend; ทดสอบ HTTP parser จริงและตรวจ typecheck/build ผ่าน รวม tests 20/20
@@ -58,7 +59,7 @@ Workflow `Deploy production` มีตัวตรวจเป้าหมาย
 - บัญชีทีมงานจำลองใน local ได้ role `staff` และอ่านแดชบอร์ดโดยไม่เห็นรายชื่อทีมงาน; เพิ่มทีมงานถูกปฏิเสธ (`403`); เมื่อปิดสิทธิ์แล้ว `/api/me` ถูกปฏิเสธ (`403`) และลบบัญชี QA แล้ว
 - Request ที่ไม่ล็อกอินไปยัง `/`, `/admin`, `/api/me`, `/api/dashboard` และ API รูปถูกส่งไป Cloudflare Access (`302`)
 - ตรวจหน้าเว็บผู้ชมและหลังบ้านที่ viewport มือถือกว้าง 390px แล้ว ไม่มีส่วนหลักล้นขอบ และ build สร้าง PWA manifest/service worker สำเร็จ
-- ยังต้องทดสอบการเลือกไฟล์ผ่าน UI บน staging และบัญชีทีมงานจริง เบราว์เซอร์ทดสอบยังไม่มีสิทธิ์ให้ extension เลือกไฟล์ในเครื่อง และ Access policy ปัจจุบันอนุญาตเฉพาะเจ้าของ
+- การเลือกไฟล์ผ่าน UI บน staging ทดสอบผ่านแล้วเมื่อ 29 กันยายน 2026; บัญชีทีมงานจริงยังไม่ได้ทดสอบตามคำขอเจ้าของ และ Access policy ปัจจุบันอนุญาตเฉพาะเจ้าของ
 
 ## เปิดหน้าเว็บให้คนทั่วไปเมื่อพร้อม
 
