@@ -8,7 +8,7 @@
 - Zero Trust Free เปิดใช้งานแล้ว และ Access app `MetaFarm Next admin` จำกัด `metafarm-next.wong-saengsurasak.workers.dev/admin*` กับ `/api/*` ด้วยนโยบายอีเมลเจ้าของ
 - Worker `metafarm-next` มี secrets `DATABASE_URL`, `OWNER_EMAIL`, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` แล้ว แต่ตั้ง `workers_dev: false` และ `preview_urls: false` จึง **ยังไม่มี public URL**
 - หน้าเว็บสาธารณะยังเป็นเนื้อหาตัวอย่าง ต้องยืนยันข้อมูลฟาร์มก่อนเปิด route จริง
-- GitHub Actions ยังมี `startup_failure` ก่อนเริ่ม job; หากยังไม่แก้ ให้ใช้ Wrangler จากเครื่องที่ล็อกอินเพื่อตรวจและ deploy หลังผ่านรายการด้านล่าง
+- GitHub Actions ยังรันไม่ได้เพราะ GitHub แจ้งว่า **บัญชีถูกล็อกด้าน billing** (จึง `startup_failure` ก่อนเริ่ม job ไม่ใช่ปัญหาใน workflow) เจ้าของบัญชีต้องแก้ billing ใน GitHub ก่อนจึงจะใช้ปุ่ม `Deploy production` ได้ ระหว่างนี้ใช้ Wrangler จากเครื่องที่ล็อกอินเพื่อตรวจและ deploy หลังผ่านรายการด้านล่าง
 
 ## เปิด public URL เมื่อพร้อม
 
