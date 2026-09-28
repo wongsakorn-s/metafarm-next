@@ -1,20 +1,6 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
-
-export const publicRoutes = [
-  { path: "/", label: "หน้าแรก" },
-  { path: "/stingless-bee", label: "ชันโรงขนเงิน" },
-  { path: "/stingless-bee-honey", label: "น้ำผึ้งชันโรง" },
-  { path: "/product", label: "สินค้า" },
-  { path: "/training", label: "อบรม" },
-  { path: "/pocketbook", label: "สมุดพกชันโรง" },
-  { path: "/contact", label: "ติดต่อเรา" },
-] as const;
-
-export function resolvePublicPath(pathname: string): string {
-  const path = pathname === "/" ? "/" : pathname.replace(/\/+$/, "");
-  return publicRoutes.some((route) => route.path === path) ? path : "/";
-}
+import { publicRoutes, resolvePublicPath } from "./publicRoutes";
 
 function Header({ path }: { path: string }) {
   const [open, setOpen] = useState(false);

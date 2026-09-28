@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { publicRoutes, resolvePublicPath } from "./PublicPage";
+import { publicRoutes, resolvePublicPath } from "./publicRoutes";
 
 describe("public pages migrated from the original app", () => {
   it("keeps every original public route", () => {
