@@ -1,0 +1,12 @@
+node_modules/
+.svelte-kit/
+.wrangler/
+build/
+dist/
+.env
+.env.*
+!.env.example
+!.dev.vars.example
+.dev.vars
+worker-configuration.d.ts
+*.tsbuildinfo

@@ -1,0 +1,10 @@
+@import 'tailwindcss';
+
+:root { font-family: 'Noto Sans Thai', 'Segoe UI', sans-serif; color: #173b31; background: #f7f7f2; }
+body { margin: 0; }
+button, input, select, textarea { font: inherit; }
+.input { display: block; width: 100%; margin-top: .4rem; border: 1px solid #cbd5d1; border-radius: .7rem; padding: .65rem .75rem; background: white; }
+.input:focus { outline: 2px solid #4f947b; outline-offset: 1px; }
+.primary { width: 100%; border-radius: .7rem; background: #123d32; padding: .7rem 1rem; color: white; font-weight: 700; cursor: pointer; }
+.primary:hover { background: #1f604f; }
+.primary:disabled { opacity: .45; cursor: not-allowed; }

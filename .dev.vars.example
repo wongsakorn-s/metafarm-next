@@ -1,0 +1,5 @@
+OWNER_EMAIL=owner@example.com
+DEV_AUTH_EMAIL=owner@example.com
+DATABASE_URL=postgresql://user:password@host.neon.tech/database?sslmode=require
+ACCESS_TEAM_DOMAIN=https://your-team.cloudflareaccess.com
+ACCESS_AUD=replace-with-access-application-aud
