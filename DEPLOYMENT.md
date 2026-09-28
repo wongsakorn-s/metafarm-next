@@ -45,6 +45,7 @@ Workflow `Deploy production` มีตัวตรวจเป้าหมาย
 - พักการทดสอบทีมงานจริง ไม่รอการล็อกอินบัญชี QA; ยังไม่ถือว่าทดสอบ role `staff` แบบ end-to-end ผ่าน
 - แก้ API parser errors ให้ไฟล์/JSON เกินขนาดตอบ `413`, JSON ผิดรูปแบบตอบ `400`, encoding ที่ไม่รองรับตอบ `415` พร้อมข้อความ JSON ภาษาไทย และปรับเพดานรูป API เป็น 2,000,000 bytes ให้ตรง frontend; ทดสอบ HTTP parser จริงและตรวจ typecheck/build ผ่าน รวม tests 20/20
 - [Deploy staging #2](https://github.com/wongsakorn-s/metafarm-next/actions/runs/36457223184) ผ่านครบสำหรับ commit `2d0891d`; Worker version `c6d3204d-0fed-4861-9c22-459d7d78d5f0` ใช้ R2 staging และหลัง deploy เจ้าของเข้าแดชบอร์ดได้โดยข้อมูลยังเป็น 0 ทั้งหมด
+- [Deploy staging #3](https://github.com/wongsakorn-s/metafarm-next/actions/runs/36499240913) ผ่านครบสำหรับ commit `a8de56c` (tests 22/22); เปิดหน้าเว็บ 7 หน้าและสื่อจากโปรเจกต์เดิมบน staging หลัง Access ได้ วิดีโอและโลโก้โหลดสำเร็จ; production ยังใช้หน้าเดิมและยังไม่เปิด public
 
 ## วิธี deploy staging ครั้งถัดไป
 
