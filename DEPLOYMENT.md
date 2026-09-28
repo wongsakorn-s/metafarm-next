@@ -5,7 +5,7 @@
 ## สถานะการเตรียมระบบ (28 กันยายน 2026)
 
 - Neon schema ถูก migrate แล้ว; R2 bucket `metafarm-next-media` ถูกสร้างแล้ว
-- สร้าง Neon branch `staging` แบบ schema-only พร้อม migration baseline และ R2 bucket `metafarm-next-media-staging` แล้ว; Worker `metafarm-next-staging` ถูกอัปโหลดโดย **ยังไม่มี public route** (`workers_dev: false`) และมี secrets `DATABASE_URL`, `OWNER_EMAIL`
+- สร้าง Neon branch `staging` แบบ schema-only พร้อม migration baseline และ R2 bucket `metafarm-next-media-staging` แล้ว; Worker `metafarm-next-staging` ถูกอัปโหลดโดย **ยังไม่มี public route** (`workers_dev: false`) และมี secrets `DATABASE_URL`, `OWNER_EMAIL`, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` ครบแล้ว
 - มี Neon branch `development` แบบ schema-only สำหรับรัน local โดยแยกจาก branch `production`; `.dev.vars` บนเครื่องนี้ชี้ development แล้ว และคำสั่ง local ตรวจ hostname ก่อนใช้ฐานข้อมูล
 - Zero Trust Free เปิดใช้งานแล้ว และ Access app `MetaFarm Next admin` ครอบ hostname `metafarm-next.wong-saengsurasak.workers.dev` ทั้งหมด รวมทั้ง `/admin*` และ `/api/*` ด้วยนโยบายอีเมลเจ้าของ
 - Worker `metafarm-next` มี secrets `DATABASE_URL`, `OWNER_EMAIL`, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` แล้ว เปิด `workers_dev: true` และคง `preview_urls: false` เป็น **private staging** ที่ `https://metafarm-next.wong-saengsurasak.workers.dev` (ต้องผ่าน Access ก่อนเห็นทุกหน้า)
@@ -18,7 +18,7 @@
 ## แยก staging ให้พร้อมใช้งาน
 
 1. เพิ่ม `metafarm-next-staging.wong-saengsurasak.workers.dev` ใน Cloudflare Access app เดิมให้ครอบทั้ง hostname โดยใช้นโยบาย `MetaFarm owner` เดิม **ก่อน** เปิด `workers_dev` บน Worker staging
-2. ตั้ง Worker staging secrets `ACCESS_TEAM_DOMAIN` และ `ACCESS_AUD` ให้ตรงกับ Access app ที่ป้องกัน hostname นี้ ห้ามตั้ง `DEV_AUTH_EMAIL`
+2. ยืนยันว่า Worker staging secrets ทั้งสี่รายการยังอยู่และ `ACCESS_TEAM_DOMAIN`/`ACCESS_AUD` ตรงกับ Access app ที่ป้องกัน hostname นี้ ห้ามตั้ง `DEV_AUTH_EMAIL`
 3. เปลี่ยน `workers_dev` ใน `wrangler.staging.jsonc` เป็น `true` แล้ว deploy staging; ตรวจว่า request ไม่ล็อกอินถูกส่งไป Access ก่อนเห็นหน้าเว็บ/API
 4. สร้าง GitHub Environment `staging` แล้วตั้ง secrets `NEON_DATABASE_URL` (branch staging), `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` ให้ครบ ก่อนสั่ง workflow `Deploy staging` จาก `main` ตรวจ hostname Neon, Worker name และ R2 bucket อัตโนมัติก่อน migrate/deploy
 5. ทดสอบบัญชีเจ้าของและทีมงาน รวมถึงการอัปโหลด/อ่านรูปใน bucket staging และยืนยันว่าข้อมูล production ไม่เปลี่ยน
