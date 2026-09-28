@@ -8,11 +8,13 @@
 - สร้าง Neon branch `staging` แบบ schema-only พร้อม migration baseline และ R2 bucket `metafarm-next-media-staging` แล้ว; Worker `metafarm-next-staging` เปิด route ที่ `https://metafarm-next-staging.wong-saengsurasak.workers.dev` และมี secrets `DATABASE_URL`, `OWNER_EMAIL`, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` ครบแล้ว
 - มี Neon branch `development` แบบ schema-only สำหรับรัน local โดยแยกจาก branch `production`; `.dev.vars` บนเครื่องนี้ชี้ development แล้ว และคำสั่ง local ตรวจ hostname ก่อนใช้ฐานข้อมูล
 - Zero Trust Free เปิดใช้งานแล้ว และ Access app `MetaFarm Next admin` ครอบ hostname `metafarm-next.wong-saengsurasak.workers.dev` ทั้งหมด รวมทั้ง `/admin*` และ `/api/*` ด้วยนโยบายอีเมลเจ้าของ
-- Worker `metafarm-next` มี secrets `DATABASE_URL`, `OWNER_EMAIL`, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` แล้ว เปิด `workers_dev: true` และคง `preview_urls: false` เป็น **private staging** ที่ `https://metafarm-next.wong-saengsurasak.workers.dev` (ต้องผ่าน Access ก่อนเห็นทุกหน้า)
+- Worker `metafarm-next` มี secrets `DATABASE_URL`, `OWNER_EMAIL`, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` แล้ว เปิด `workers_dev: true` และคง `preview_urls: false` เป็น **private production** ที่ `https://metafarm-next.wong-saengsurasak.workers.dev` (ต้องผ่าน Access ก่อนเห็นทุกหน้า)
 - ตรวจแล้วว่า request ไม่ล็อกอินไปยัง `/`, `/admin`, `/api/me`, `/health` และไฟล์ asset ถูกส่งไปหน้า Access; บัญชีเจ้าของเข้า `/admin`, `/api/me` และ `/api/dashboard` ได้
 - หน้าเว็บผู้ชมยังเป็นเนื้อหาตัวอย่าง ต้องยืนยันข้อมูลฟาร์มก่อนเปิดให้คนทั่วไปเข้าชม
 - GitHub billing กลับมาใช้งานได้แล้ว: [CI run #2](https://github.com/wongsakorn-s/metafarm-next/actions/runs/36440871524) บน `main` ผ่านครบ (test 8/8) เมื่อ 28 กันยายน 2026
-- GitHub Environment `production` ยังต้องตั้ง secrets ของ production แยกต่างหากก่อนใช้ workflow `Deploy production`; ห้ามนำ credentials ของ staging มาใช้แทน
+- GitHub Environment `production` จำกัดให้ deploy จาก branch `main` เท่านั้น (ไม่อนุญาต tag) และมี environment secrets `NEON_DATABASE_URL`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` ครบแล้ว โดยใช้ credentials ของ production แยกจาก staging
+- Cloudflare token `metafarm-next-production-github-actions` จำกัด `Individual Workers Editor` เฉพาะ Worker `metafarm-next` และหมดอายุ 29 กันยายน 2027
+- [Deploy production #1](https://github.com/wongsakorn-s/metafarm-next/actions/runs/36497441404) ผ่านครบสำหรับ commit `1c289c4`: typecheck, tests, ตรวจเป้าหมาย, migrate, build และ deploy ใน 36 วินาที; หน้า public และ API ยังอยู่หลัง Access ทั้งหมด, บัญชีเจ้าของเข้า `/admin` ได้ และรัง/ผลผลิต/การตรวจยังเป็น 0
 - GitHub Environment `staging` จำกัดให้ deploy จาก branch `main` เท่านั้น (ไม่อนุญาต tag) และมี environment secrets `NEON_DATABASE_URL`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` ครบแล้ว
 - Cloudflare token `metafarm-next-staging-github-actions` จำกัด `Individual Workers Editor` เฉพาะ Worker `metafarm-next-staging` และหมดอายุ 29 กันยายน 2027
 - [Deploy staging #1](https://github.com/wongsakorn-s/metafarm-next/actions/runs/36454418704) ผ่านครบ: typecheck, tests 13/13, ตรวจเป้าหมาย, migrate, build และ deploy commit `c38af8e`; Worker version `73d3e444-c80b-45d3-855f-f85d8e488073`
@@ -28,7 +30,7 @@
 4. ~~จำกัด GitHub Environment `staging` ให้ deploy จาก `main` เท่านั้น ตั้ง environment secrets และรัน workflow `Deploy staging`~~ — เสร็จแล้ว; workflow ตรวจ hostname Neon, Worker name และ R2 bucket อัตโนมัติก่อน migrate/deploy
 5. ~~ทดสอบการอัปโหลด/อ่านรูปใน bucket staging~~ — ผ่านเมื่อ 29 กันยายน 2026; การทดสอบบัญชีทีมงานจริงพักไว้ตามคำขอเจ้าของ
 
-Workflow `Deploy production` มีตัวตรวจเป้าหมาย production เช่นกัน แต่ยังไม่ควรรันจนกว่าจะกำหนด production environment/secrets และผ่านการเปิดตัวเว็บสาธารณะตามรายการด้านล่าง
+Workflow `Deploy production` มีตัวตรวจเป้าหมาย production เช่นกัน และผ่านการทดสอบแบบ **private** แล้ว; ห้ามเปิดหน้า public จนกว่าจะยืนยันข้อมูลฟาร์มจริงและทดสอบตามรายการด้านล่าง
 
 ## ผลทดสอบ isolated staging หลัง GitHub Actions deploy
 
