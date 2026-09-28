@@ -5,6 +5,7 @@
 ## สถานะการเตรียมระบบ (28 กันยายน 2026)
 
 - Neon schema ถูก migrate แล้ว; R2 bucket `metafarm-next-media` ถูกสร้างแล้ว
+- สร้าง Neon branch `staging` แบบ schema-only พร้อม migration baseline และ R2 bucket `metafarm-next-media-staging` แล้ว; Worker `metafarm-next-staging` ถูกอัปโหลดโดย **ยังไม่มี public route** (`workers_dev: false`) และมี secrets `DATABASE_URL`, `OWNER_EMAIL`
 - มี Neon branch `development` แบบ schema-only สำหรับรัน local โดยแยกจาก branch `production`; `.dev.vars` บนเครื่องนี้ชี้ development แล้ว และคำสั่ง local ตรวจ hostname ก่อนใช้ฐานข้อมูล
 - Zero Trust Free เปิดใช้งานแล้ว และ Access app `MetaFarm Next admin` ครอบ hostname `metafarm-next.wong-saengsurasak.workers.dev` ทั้งหมด รวมทั้ง `/admin*` และ `/api/*` ด้วยนโยบายอีเมลเจ้าของ
 - Worker `metafarm-next` มี secrets `DATABASE_URL`, `OWNER_EMAIL`, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` แล้ว เปิด `workers_dev: true` และคง `preview_urls: false` เป็น **private staging** ที่ `https://metafarm-next.wong-saengsurasak.workers.dev` (ต้องผ่าน Access ก่อนเห็นทุกหน้า)
@@ -12,7 +13,17 @@
 - หน้าเว็บผู้ชมยังเป็นเนื้อหาตัวอย่าง ต้องยืนยันข้อมูลฟาร์มก่อนเปิดให้คนทั่วไปเข้าชม
 - GitHub billing กลับมาใช้งานได้แล้ว: [CI run #2](https://github.com/wongsakorn-s/metafarm-next/actions/runs/36440871524) บน `main` ผ่านครบ (test 8/8) เมื่อ 28 กันยายน 2026
 - GitHub repo ยังไม่มี Actions secrets; workflow `Deploy production` ยังรันไม่ได้จนกว่าจะตั้ง `NEON_DATABASE_URL`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` และตรวจเป้าหมาย deploy ตามขั้นตอนด้านล่าง
-- **ยังไม่แยก staging ออกจาก production ทั้งหมด:** Worker `metafarm-next` ปัจจุบันยังใช้ Neon branch `production` และ R2 bucket หลัก อย่าใช้ staging ทดสอบการเขียนข้อมูลที่เสี่ยงหรือรัน migration ทดลอง จนกว่าจะสร้าง staging database/bucket/Worker แยกและยืนยันค่า binding
+- **ยังไม่แยก staging ออกจาก production ทั้งหมด:** Worker เดิม `metafarm-next` ยังใช้ Neon branch `production` และ R2 bucket หลัก ส่วน Worker `metafarm-next-staging` ยังไม่มี public route และ Access secrets อย่าใช้ Worker เดิมทดสอบการเขียนข้อมูลที่เสี่ยงหรือรัน migration ทดลอง
+
+## แยก staging ให้พร้อมใช้งาน
+
+1. เพิ่ม `metafarm-next-staging.wong-saengsurasak.workers.dev` ใน Cloudflare Access app เดิมให้ครอบทั้ง hostname โดยใช้นโยบาย `MetaFarm owner` เดิม **ก่อน** เปิด `workers_dev` บน Worker staging
+2. ตั้ง Worker staging secrets `ACCESS_TEAM_DOMAIN` และ `ACCESS_AUD` ให้ตรงกับ Access app ที่ป้องกัน hostname นี้ ห้ามตั้ง `DEV_AUTH_EMAIL`
+3. เปลี่ยน `workers_dev` ใน `wrangler.staging.jsonc` เป็น `true` แล้ว deploy staging; ตรวจว่า request ไม่ล็อกอินถูกส่งไป Access ก่อนเห็นหน้าเว็บ/API
+4. สร้าง GitHub Environment `staging` แล้วตั้ง secrets `NEON_DATABASE_URL` (branch staging), `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` ให้ครบ ก่อนสั่ง workflow `Deploy staging` จาก `main` ตรวจ hostname Neon, Worker name และ R2 bucket อัตโนมัติก่อน migrate/deploy
+5. ทดสอบบัญชีเจ้าของและทีมงาน รวมถึงการอัปโหลด/อ่านรูปใน bucket staging และยืนยันว่าข้อมูล production ไม่เปลี่ยน
+
+Workflow `Deploy production` มีตัวตรวจเป้าหมาย production เช่นกัน แต่ยังไม่ควรรันจนกว่าจะกำหนด production environment/secrets และผ่านการเปิดตัวเว็บสาธารณะตามรายการด้านล่าง
 
 ## ผลทดสอบ private staging (28 กันยายน 2026)
 
