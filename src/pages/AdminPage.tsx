@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { api, type Dashboard, type Hive, type Inspection } from '../lib/api';
+import { farmDate } from '../lib/date';
 
 type Section = 'hives' | 'harvests' | 'inspections' | 'team';
 const statuses = ['Strong', 'Normal', 'Weak', 'Empty'];
-const today = new Date().toISOString().slice(0, 10);
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return <label className="block text-sm font-semibold">{label}{children}</label>;
@@ -17,7 +17,16 @@ function StatusSelect({ value = 'Normal' }: { value?: string }) {
   return <select name="status" defaultValue={value} className="input">{statuses.map((status) => <option key={status}>{status}</option>)}</select>;
 }
 
+function validatedImage(value: FormDataEntryValue | null): File | null {
+  if (!(value instanceof File) || value.size === 0) return null;
+  if (value.size > 2_000_000 || !['image/jpeg', 'image/png', 'image/webp'].includes(value.type)) {
+    throw new Error('รูปต้องเป็น JPEG/PNG/WebP และไม่เกิน 2 MB');
+  }
+  return value;
+}
+
 export function AdminPage() {
+  const today = farmDate();
   const [data, setData] = useState<Dashboard | null>(null);
   const [section, setSection] = useState<Section>('hives');
   const [notice, setNotice] = useState('');
@@ -63,18 +72,22 @@ export function AdminPage() {
     const form = event.currentTarget;
     await submit(event, async () => {
       const values = Object.fromEntries(new FormData(form));
-      const image = values.image;
+      const image = validatedImage(values.image ?? null);
       delete values.image;
-      if (image instanceof File && image.size > 0) {
-        if (image.size > 2_000_000 || !['image/jpeg', 'image/png', 'image/webp'].includes(image.type)) {
-          throw new Error('รูปต้องเป็น JPEG/PNG/WebP และไม่เกิน 2 MB');
-        }
-      }
       const record = await api<Inspection>('/inspections', { method: 'POST', body: JSON.stringify(values) });
-      if (image instanceof File && image.size > 0) {
+      if (image) {
         try { await api(`/inspections/${record.id}/photo`, { method: 'PUT', body: image, headers: { 'Content-Type': image.type } }); }
         catch (cause) { throw new Error(`บันทึกการตรวจแล้ว แต่เพิ่มรูปไม่สำเร็จ: ${cause instanceof Error ? cause.message : 'ลองอีกครั้ง'}`); }
       }
+    });
+  }
+
+  async function uploadInspectionPhoto(event: FormEvent<HTMLFormElement>, inspectionId: string) {
+    const form = event.currentTarget;
+    await submit(event, async () => {
+      const image = validatedImage(new FormData(form).get('image'));
+      if (!image) throw new Error('กรุณาเลือกรูป');
+      await api(`/inspections/${inspectionId}/photo`, { method: 'PUT', body: image, headers: { 'Content-Type': image.type } });
     });
   }
 
@@ -108,7 +121,19 @@ export function AdminPage() {
         </div>}
         {section === 'inspections' && <div className="mt-6 grid gap-6 lg:grid-cols-[350px_1fr]">
           <form onSubmit={createInspection} className="h-fit space-y-4 rounded-2xl bg-white p-6 shadow-sm"><h2 className="text-xl font-bold">บันทึกการตรวจ</h2><Field label="รัง"><select required name="hiveId" className="input"><option value="">เลือกรัง</option>{data.hives.map((hive) => <option value={hive.id} key={hive.id}>{hive.code} · {hive.name}</option>)}</select></Field><Field label="วันที่ตรวจ"><input required type="date" name="inspectedAt" defaultValue={today} className="input" /></Field><Field label="สถานะ"><StatusSelect /></Field><Field label="บันทึก"><textarea name="notes" maxLength={2000} rows={4} className="input" /></Field><Field label="รูป (ไม่เกิน 2 MB)"><input type="file" name="image" accept="image/jpeg,image/png,image/webp" className="input" /></Field><button disabled={busy || !data.hives.length} className="primary">บันทึกการตรวจ</button></form>
-          <div className="space-y-3">{data.inspections.map((record) => <article key={record.id} className="rounded-2xl bg-white p-5 shadow-sm"><p className="font-bold">{hiveName(record.hiveId)} <span className="text-sm font-normal text-slate-500">· {record.inspectedAt}</span></p><p className="mt-2 text-sm text-emerald-800">สถานะ: {record.status}</p>{record.notes && <p className="mt-2 whitespace-pre-wrap text-slate-600">{record.notes}</p>}{record.imageKey && <a href={`/api/inspections/${record.id}/photo`} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block font-semibold text-emerald-800 underline">ดูรูปถ่าย</a>}</article>)}{!data.inspections.length && <Card>ยังไม่มีบันทึก</Card>}</div>
+          <div className="space-y-3">
+            {data.inspections.map((record) => <article key={record.id} className="rounded-2xl bg-white p-5 shadow-sm">
+              <p className="font-bold">{hiveName(record.hiveId)} <span className="text-sm font-normal text-slate-500">· {record.inspectedAt}</span></p>
+              <p className="mt-2 text-sm text-emerald-800">สถานะ: {record.status}</p>
+              {record.notes && <p className="mt-2 whitespace-pre-wrap text-slate-600">{record.notes}</p>}
+              {record.imageKey && <a href={`/api/inspections/${record.id}/photo`} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block font-semibold text-emerald-800 underline">ดูรูปถ่าย</a>}
+              <form onSubmit={(event) => uploadInspectionPhoto(event, record.id)} className="mt-4 flex flex-wrap items-end gap-3">
+                <Field label="รูป (ไม่เกิน 2 MB)"><input required type="file" name="image" accept="image/jpeg,image/png,image/webp" className="input" /></Field>
+                <button disabled={busy} className="primary">{record.imageKey ? 'เปลี่ยนรูป' : 'แนบรูป'}</button>
+              </form>
+            </article>)}
+            {!data.inspections.length && <Card>ยังไม่มีบันทึก</Card>}
+          </div>
         </div>}
         {section === 'team' && data.staff.role === 'owner' && <div className="mt-6 grid gap-6 lg:grid-cols-[350px_1fr]">
           <form onSubmit={createTeam} className="h-fit space-y-4 rounded-2xl bg-white p-6 shadow-sm"><h2 className="text-xl font-bold">เพิ่มทีมงาน</h2><Field label="อีเมล"><input required type="email" maxLength={254} name="email" className="input" /></Field><button disabled={busy} className="primary">เพิ่มสิทธิ์</button><p className="text-sm text-slate-500">ต้องเพิ่มอีเมลเดียวกันใน Cloudflare Access policy ด้วย</p></form>
