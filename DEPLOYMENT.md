@@ -13,14 +13,16 @@
 - หน้าเว็บผู้ชมยังเป็นเนื้อหาตัวอย่าง ต้องยืนยันข้อมูลฟาร์มก่อนเปิดให้คนทั่วไปเข้าชม
 - GitHub billing กลับมาใช้งานได้แล้ว: [CI run #2](https://github.com/wongsakorn-s/metafarm-next/actions/runs/36440871524) บน `main` ผ่านครบ (test 8/8) เมื่อ 28 กันยายน 2026
 - GitHub repo ยังไม่มี Actions secrets; workflow `Deploy production` ยังรันไม่ได้จนกว่าจะตั้ง `NEON_DATABASE_URL`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` และตรวจเป้าหมาย deploy ตามขั้นตอนด้านล่าง
-- **ยังไม่แยก staging ออกจาก production ทั้งหมด:** Worker เดิม `metafarm-next` ยังใช้ Neon branch `production` และ R2 bucket หลัก ส่วน Worker `metafarm-next-staging` ยังไม่มี public route และ Access secrets อย่าใช้ Worker เดิมทดสอบการเขียนข้อมูลที่เสี่ยงหรือรัน migration ทดลอง
+- GitHub Environment `staging` สร้างแล้ว แต่ยังไม่ได้จำกัด branch และยังไม่มี environment secrets
+- **ยังไม่แยก staging ออกจาก production ทั้งหมด:** Worker เดิม `metafarm-next` ยังใช้ Neon branch `production` และ R2 bucket หลัก ส่วน Worker `metafarm-next-staging` ยังไม่มี public route แม้ตั้ง secrets แล้ว อย่าใช้ Worker เดิมทดสอบการเขียนข้อมูลที่เสี่ยงหรือรัน migration ทดลอง
+- ลองเพิ่ม hostname staging ใน Access app เดิมแล้วพบว่า callback หลังล็อกอินพาไป hostname ของ Worker เดิม จึงปิด route staging กลับทันที ต้องย้าย hostname ไป Access app แยกก่อนเปิด staging อีกครั้ง
 
 ## แยก staging ให้พร้อมใช้งาน
 
-1. เพิ่ม `metafarm-next-staging.wong-saengsurasak.workers.dev` ใน Cloudflare Access app เดิมให้ครอบทั้ง hostname โดยใช้นโยบาย `MetaFarm owner` เดิม **ก่อน** เปิด `workers_dev` บน Worker staging
-2. ยืนยันว่า Worker staging secrets ทั้งสี่รายการยังอยู่และ `ACCESS_TEAM_DOMAIN`/`ACCESS_AUD` ตรงกับ Access app ที่ป้องกัน hostname นี้ ห้ามตั้ง `DEV_AUTH_EMAIL`
+1. สร้าง Cloudflare Access app **แยกสำหรับ staging** ให้ครอบ `metafarm-next-staging.wong-saengsurasak.workers.dev` ทั้ง hostname โดยใช้นโยบาย `MetaFarm owner` เดิม **ก่อน** เปิด `workers_dev` บน Worker staging อย่ารวม hostname นี้กับ Access app ของ Worker เดิม: ทดสอบแล้วว่า callback หลังล็อกอินถูกส่งไป hostname แรกของ app เดิม
+2. ยืนยันว่า Worker staging secrets ทั้งสี่รายการยังอยู่ ตั้ง `ACCESS_AUD` ใหม่ให้ตรงกับ Access app staging และ `ACCESS_TEAM_DOMAIN` เป็น team domain เดิม ห้ามตั้ง `DEV_AUTH_EMAIL`
 3. เปลี่ยน `workers_dev` ใน `wrangler.staging.jsonc` เป็น `true` แล้ว deploy staging; ตรวจว่า request ไม่ล็อกอินถูกส่งไป Access ก่อนเห็นหน้าเว็บ/API
-4. สร้าง GitHub Environment `staging` แล้วตั้ง secrets `NEON_DATABASE_URL` (branch staging), `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` ให้ครบ ก่อนสั่ง workflow `Deploy staging` จาก `main` ตรวจ hostname Neon, Worker name และ R2 bucket อัตโนมัติก่อน migrate/deploy
+4. จำกัด GitHub Environment `staging` ให้ deploy จาก `main` เท่านั้น แล้วตั้ง secrets `NEON_DATABASE_URL` (branch staging), `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` ให้ครบ ก่อนสั่ง workflow `Deploy staging` ซึ่งตรวจ hostname Neon, Worker name และ R2 bucket อัตโนมัติก่อน migrate/deploy
 5. ทดสอบบัญชีเจ้าของและทีมงาน รวมถึงการอัปโหลด/อ่านรูปใน bucket staging และยืนยันว่าข้อมูล production ไม่เปลี่ยน
 
 Workflow `Deploy production` มีตัวตรวจเป้าหมาย production เช่นกัน แต่ยังไม่ควรรันจนกว่าจะกำหนด production environment/secrets และผ่านการเปิดตัวเว็บสาธารณะตามรายการด้านล่าง
