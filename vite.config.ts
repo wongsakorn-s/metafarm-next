@@ -40,6 +40,7 @@ export default defineConfig({
     include: [
       "server/**/*.test.ts",
       "src/**/*.test.ts",
+      "src/**/*.test.tsx",
       "scripts/**/*.test.ts",
     ],
   },

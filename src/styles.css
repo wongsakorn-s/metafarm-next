@@ -1,16 +1,60 @@
 @import "tailwindcss";
 
-:root {
-  font-family:
+@theme {
+  --font-sans:
     "Noto Sans Thai Looped", "Noto Sans Thai", "Segoe UI", sans-serif;
-  color: #1c1917;
-  background: #fafaf9;
+  --color-honey-50: #fff9ed;
+  --color-honey-100: #fff0cd;
+  --color-honey-200: #ffda88;
+  --color-honey-400: #fbbf24;
+  --color-honey-500: #f59e0b;
+  --color-honey-700: #92400e;
+  --color-honey-900: #451a03;
+  --color-leaf-50: #eef5f0;
+  --color-leaf-100: #dce9df;
+  --color-leaf-600: #315242;
+  --color-leaf-800: #173e30;
+  --color-success-50: #ecfdf3;
+  --color-success-700: #166534;
+  --color-warning-50: #fffbeb;
+  --color-warning-700: #92400e;
+  --color-danger-50: #fef2f2;
+  --color-danger-700: #b91c1c;
+  --color-info-50: #eff6ff;
+  --color-info-700: #1d4ed8;
+  --color-hive-strong: #166534;
+  --color-hive-strong-bg: #ecfdf3;
+  --color-hive-normal: #1d4ed8;
+  --color-hive-normal-bg: #eff6ff;
+  --color-hive-weak: #92400e;
+  --color-hive-weak-bg: #fffbeb;
+  --color-hive-empty: #57534e;
+  --color-hive-empty-bg: #f5f5f4;
+  --radius-control: 0.875rem;
+  --radius-card: 1.5rem;
+  --radius-hero: 2rem;
+  --shadow-card: 0 18px 45px -30px rgb(68 64 60 / 0.4);
+  --shadow-float: 0 22px 55px -25px rgb(68 64 60 / 0.5);
+  --text-display: clamp(2.25rem, 5vw, 4rem);
+  --text-display--line-height: 1.3;
+  --text-page: clamp(1.875rem, 3vw, 2.75rem);
+  --text-page--line-height: 1.3;
 }
-body {
-  margin: 0;
+
+:root {
+  color-scheme: light;
+  background: var(--color-stone-50);
+  color: var(--color-stone-900);
 }
 html {
   scroll-behavior: smooth;
+  line-break: strict;
+  word-break: normal;
+}
+body {
+  margin: 0;
+  min-width: 320px;
+  line-height: 1.7;
 }
 button,
 input,
@@ -18,152 +62,41 @@ select,
 textarea {
   font: inherit;
 }
-.input {
-  display: block;
-  width: 100%;
-  margin-top: 0.4rem;
-  border: 1px solid #d6d3d1;
-  border-radius: 0.875rem;
-  padding: 0.65rem 0.75rem;
-  background: white;
-}
-.input:focus {
-  outline: 2px solid #f59e0b;
-  outline-offset: 1px;
-}
-.primary {
-  width: 100%;
-  border-radius: 0.875rem;
-  background: #f59e0b;
-  padding: 0.7rem 1rem;
-  color: white;
-  font-weight: 700;
+button,
+select,
+summary {
   cursor: pointer;
 }
-.primary:hover {
-  background: #d97706;
-}
-.primary:disabled {
-  opacity: 0.45;
+button:disabled {
   cursor: not-allowed;
+  opacity: 0.55;
 }
-
-.public-section {
-  width: 100%;
-  max-width: 1440px;
-  margin-inline: auto;
-  padding-inline: 1.25rem;
+h1,
+h2,
+h3,
+h4 {
+  line-height: 1.3;
+  text-wrap: balance;
 }
-.public-eyebrow {
-  font-size: 0.75rem;
-  font-weight: 800;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+p {
+  text-wrap: pretty;
 }
-.public-nav-link {
-  display: inline-flex;
-  min-height: 44px;
-  align-items: center;
-  border-radius: 999px;
-  padding: 0.6rem 0.85rem;
-  color: #315242;
-  font-size: 0.875rem;
-  font-weight: 650;
-  transition:
-    background 0.2s,
-    color 0.2s;
+:where(a, button, input, select, textarea, summary):focus-visible {
+  outline: 3px solid var(--color-leaf-800);
+  outline-offset: 3px;
 }
-.public-nav-link:hover,
-.public-nav-active {
-  background: #e6ede3;
-  color: #173e30;
-}
-.public-button-outline,
-.public-button-solid {
-  align-items: center;
-  justify-content: center;
-  gap: 0.65rem;
-  border-radius: 999px;
-  padding: 0.75rem 1.15rem;
-  font-size: 0.875rem;
-  font-weight: 700;
-  transition:
-    background 0.2s,
-    transform 0.2s;
-}
-.public-button-outline {
-  border: 1px solid #214b3b;
-  color: #173e30;
-}
-.public-button-outline:hover {
-  background: #e6ede3;
-}
-.public-button-solid {
-  display: inline-flex;
-  background: #173e30;
-  color: white;
-  padding: 0.95rem 1.4rem;
-}
-.public-button-solid:hover {
-  background: #275b43;
-  transform: translateY(-2px);
-}
-.public-text-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
-  border-bottom: 1px solid #173e30;
-  padding-bottom: 0.2rem;
-  color: #173e30;
-  font-weight: 700;
-}
-.public-text-link:hover {
-  color: #855517;
-  border-color: #855517;
-}
-.public-feature {
-  display: block;
-  transition:
-    transform 0.25s,
-    box-shadow 0.25s;
-}
-.public-feature:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 18px 40px #173e3024;
-}
-.public-footer-link {
-  display: flex;
-  width: fit-content;
-  min-height: 44px;
-  align-items: center;
-  color: #d6e1d9;
-}
-.public-footer-link:hover {
-  color: #ddbb70;
-}
-.public-video-control {
-  display: grid;
-  width: 44px;
-  height: 44px;
-  flex: none;
-  place-items: center;
-  border: 1px solid #ffffffb8;
-  border-radius: 50%;
-  background: #173e30cc;
-  color: white;
-  cursor: pointer;
-}
-.public-video-control:hover {
-  background: #173e30;
+::selection {
+  background: var(--color-honey-200);
+  color: var(--color-stone-900);
 }
 .skip-link {
   position: fixed;
   z-index: 100;
   top: 0.75rem;
   left: 0.75rem;
-  transform: translateY(-150%);
-  border-radius: 0.35rem;
-  background: #292524;
+  transform: translateY(-160%);
+  border-radius: var(--radius-control);
+  background: var(--color-leaf-800);
   padding: 0.75rem 1rem;
   color: white;
   font-weight: 700;
@@ -171,14 +104,8 @@ textarea {
 .skip-link:focus {
   transform: translateY(0);
 }
-:where(a, button, input, select, textarea, summary):focus-visible {
-  outline: 3px solid #b47c35;
-  outline-offset: 3px;
-}
-@media (min-width: 768px) {
-  .public-section {
-    padding-inline: 2.5rem;
-  }
+.safe-bottom {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
 }
 @media (prefers-reduced-motion: reduce) {
   html {
@@ -190,33 +117,4 @@ textarea {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
-  .public-feature,
-  .public-button-solid {
-    transition: none;
-  }
-}
-
-.admin-shell .rounded-2xl.bg-white {
-  border: 1px solid #e7e5e4;
-  border-radius: 1.5rem;
-  box-shadow: 0 20px 45px -30px #44403c59;
-}
-.admin-shell .input {
-  border-color: #d6d3d1;
-  border-radius: 0.875rem;
-  padding: 0.75rem 0.85rem;
-}
-.admin-shell .input:focus {
-  outline-color: #f59e0b;
-}
-.admin-shell .primary {
-  border-radius: 0.875rem;
-  background: #f59e0b;
-  padding-block: 0.8rem;
-}
-.admin-shell .primary:hover {
-  background: #d97706;
-}
-.admin-shell summary {
-  list-style-position: inside;
 }

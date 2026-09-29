@@ -1,14 +1,16 @@
+import { th } from "../i18n/th";
+
 export const publicRoutes = [
-  { path: '/', label: 'หน้าแรก' },
-  { path: '/stingless-bee', label: 'ชันโรงขนเงิน' },
-  { path: '/stingless-bee-honey', label: 'น้ำผึ้งชันโรง' },
-  { path: '/product', label: 'สินค้า' },
-  { path: '/training', label: 'อบรม' },
-  { path: '/pocketbook', label: 'สมุดพกชันโรง' },
-  { path: '/contact', label: 'ติดต่อเรา' }
+  { path: "/", label: th.public.nav.home },
+  { path: "/stingless-bee", label: th.public.nav.bee },
+  { path: "/stingless-bee-honey", label: th.public.nav.honey },
+  { path: "/product", label: th.public.nav.product },
+  { path: "/training", label: th.public.nav.training },
+  { path: "/pocketbook", label: th.public.nav.pocketbook },
+  { path: "/contact", label: th.public.nav.contact },
 ] as const;
 
 export function resolvePublicPath(pathname: string): string {
-  const path = pathname === '/' ? '/' : pathname.replace(/\/+$/, '');
-  return publicRoutes.some((route) => route.path === path) ? path : '/';
+  const path = pathname === "/" ? "/" : pathname.replace(/\/+$/, "");
+  return publicRoutes.some((route) => route.path === path) ? path : "/";
 }
