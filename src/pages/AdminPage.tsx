@@ -53,6 +53,9 @@ export function AdminPage() {
 
   useEffect(() => {
     document.title = `${th.admin.farmManagement} | MetaFarm`;
+    document
+      .querySelector<HTMLMetaElement>('meta[name="description"]')
+      ?.setAttribute("content", th.admin.description);
   }, []);
   const refresh = useCallback(async () => {
     setData(await api<Dashboard>("/dashboard"));
