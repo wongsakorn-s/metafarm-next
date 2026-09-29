@@ -76,6 +76,8 @@ Workflow `Deploy production` มีตัวตรวจเป้าหมาย
 
 ## เตรียมครั้งแรก
 
+ข้อมูลอากาศในหลังบ้านเรียก OpenWeather ตามระบบเดิมและ cache ผลตอบกลับ 5 นาที; หากไม่มี `OPENWEATHER_API_KEY` ระบบจะแสดงสถานะว่าไม่มีข้อมูลโดยไม่สร้างตัวเลขจำลอง ตั้งค่าเป็น Worker secret แยก staging/production เมื่อมี key ที่ได้รับอนุญาต ห้ามใส่ key ใน `wrangler.jsonc` หรือ commit ลง repo พิกัดตั้งต้นมาจาก config ในระบบเดิม และแก้ได้ด้วย `FARM_LAT`/`FARM_LON`/`FARM_LOCATION_NAME_TH`
+
 1. สร้างโปรเจกต์ Neon Free และคัดลอก PostgreSQL connection string แบบ `sslmode=require` เก็บเป็นความลับ อย่า commit ลง repo
 2. สร้างบัญชี Cloudflare และรัน `bunx wrangler login`
 3. เปิด R2 ใน Cloudflare dashboard และสร้าง private bucket: `bunx wrangler r2 bucket create metafarm-next-media` (R2 อาจต้องทำขั้นตอน billing และเกินโควตาแล้วอาจมีค่าใช้จ่าย)

@@ -9,6 +9,7 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { Skeleton } from "../components/ui/Skeleton";
 import { Toast, type ToastMessage } from "../components/ui/Toast";
 import { DashboardSummary } from "../features/dashboard/DashboardSummary";
+import { WeatherPanel } from "../features/dashboard/WeatherPanel";
 import { BackupPanel } from "../features/backup/BackupPanel";
 import { HiveForm } from "../features/hives/HiveForm";
 import { HiveList } from "../features/hives/HiveList";
@@ -314,7 +315,10 @@ export function AdminPage() {
             <div
               className={`${section === "hives" ? "order-2" : "hidden"} lg:order-1 lg:block print:hidden`}
             >
-              <DashboardSummary data={data} />
+              <div className="space-y-4">
+                <DashboardSummary data={data} />
+                <WeatherPanel />
+              </div>
             </div>
           )}
           <div className="order-1 lg:order-2">

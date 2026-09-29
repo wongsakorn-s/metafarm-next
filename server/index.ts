@@ -18,6 +18,7 @@ import { handleError, HttpError, jsonBody, photoBody } from "./http";
 import { detectImageMime } from "./image";
 import { dateRangeQuery, historyQuery, pageResult } from "./pagination";
 import { canEditHistoryRecord, requireOwner } from "./authorization";
+import { getCurrentWeather } from "./weather";
 
 const bindings = env as AppEnv;
 const app = express();
@@ -85,6 +86,10 @@ app.use("/api", async (req, res, next) => {
 });
 
 app.get("/api/me", (_req, res) => res.json(session(res)));
+
+app.get("/api/weather/current", async (_req, res) => {
+  res.json(await getCurrentWeather(bindings));
+});
 
 app.get("/api/dashboard", async (req, res) => {
   const db = database();

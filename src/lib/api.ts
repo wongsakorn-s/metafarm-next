@@ -57,6 +57,17 @@ export type Dashboard = {
   inspections: Inspection[];
   team: TeamMember[];
 };
+export type Weather = {
+  timestamp: string;
+  tempC: number;
+  humidity: number;
+  locationName: string;
+  description: string;
+  icon: string;
+  windSpeedMps: number | null;
+  cloudinessPct: number | null;
+  sourceName: "OpenWeather" | "OpenWeather (cached)";
+};
 
 export async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`/api${path}`, {

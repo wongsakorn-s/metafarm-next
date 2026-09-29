@@ -109,6 +109,10 @@ try {
   await request<{ ok: true }>(`/harvests/${createdHarvest.id}`, "DELETE");
   const afterDelete = await request<Page>(`/harvests?hiveId=${hiveId}`);
   assert.equal(afterDelete.items.length, 0);
+  if (!process.env.OPENWEATHER_API_KEY) {
+    const weatherResponse = await fetch(`${baseUrl}/weather/current`);
+    assert.equal(weatherResponse.status, 503);
+  }
   console.log("Local API smoke test passed");
 } finally {
   if (hiveId) {
