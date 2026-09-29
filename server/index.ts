@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { httpServerHandler } from "cloudflare:node";
 import express from "express";
-import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lt, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "./db";
 import { harvests, hives, inspections, staff } from "./db/schema";
@@ -15,7 +15,8 @@ import {
 } from "./validation";
 import { handleError, HttpError, jsonBody, photoBody } from "./http";
 import { detectImageMime } from "./image";
-import { historyQuery, pageResult } from "./pagination";
+import { dateRangeQuery, historyQuery, pageResult } from "./pagination";
+import { requireOwner } from "./authorization";
 
 const bindings = env as AppEnv;
 const app = express();
@@ -175,6 +176,56 @@ app.get("/api/dashboard", async (req, res) => {
   });
 });
 
+app.get("/api/export", async (req, res) => {
+  requireOwner(session(res));
+  const { from, to } = dateRangeQuery.parse(req.query);
+  const db = database();
+  const maxRows = 10_000;
+  const [hiveRows, harvestRows, inspectionRows, teamRows] = await Promise.all([
+    db.select().from(hives).orderBy(hives.code).limit(maxRows + 1),
+    db
+      .select()
+      .from(harvests)
+      .where(
+        and(
+          from ? gte(harvests.harvestedAt, from) : undefined,
+          to ? lte(harvests.harvestedAt, to) : undefined,
+        ),
+      )
+      .orderBy(harvests.harvestedAt, harvests.id)
+      .limit(maxRows + 1),
+    db
+      .select()
+      .from(inspections)
+      .where(
+        and(
+          from ? gte(inspections.inspectedAt, from) : undefined,
+          to ? lte(inspections.inspectedAt, to) : undefined,
+        ),
+      )
+      .orderBy(inspections.inspectedAt, inspections.id)
+      .limit(maxRows + 1),
+    db.select().from(staff).orderBy(staff.email).limit(maxRows + 1),
+  ]);
+  if ([hiveRows, harvestRows, inspectionRows, teamRows].some((rows) => rows.length > maxRows)) {
+    throw new HttpError(413, "ข้อมูลเกิน 10,000 รายการต่อประเภท กรุณาเลือกช่วงวันที่ให้สั้นลง");
+  }
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="metafarm-records-${new Date().toISOString().slice(0, 10)}.json"`,
+  );
+  res.json({
+    formatVersion: 1,
+    exportedAt: new Date().toISOString(),
+    dateRange: { from: from ?? null, to: to ?? null },
+    photosIncluded: false,
+    hives: hiveRows,
+    harvests: harvestRows,
+    inspections: inspectionRows,
+    team: teamRows,
+  });
+});
+
 app.post("/api/hives", async (req, res) => {
   const input = hiveInput.parse(req.body);
   const [hive] = await database()
@@ -246,11 +297,17 @@ app.get("/api/hives/:id", async (req, res) => {
 });
 
 app.get("/api/harvests", async (req, res) => {
-  const { hiveId, offset, limit } = historyQuery.parse(req.query);
+  const { hiveId, from, to, offset, limit } = historyQuery.parse(req.query);
   const rows = await database()
     .select()
     .from(harvests)
-    .where(hiveId ? eq(harvests.hiveId, hiveId) : undefined)
+    .where(
+      and(
+        hiveId ? eq(harvests.hiveId, hiveId) : undefined,
+        from ? gte(harvests.harvestedAt, from) : undefined,
+        to ? lte(harvests.harvestedAt, to) : undefined,
+      ),
+    )
     .orderBy(
       desc(harvests.harvestedAt),
       desc(harvests.createdAt),
@@ -262,11 +319,17 @@ app.get("/api/harvests", async (req, res) => {
 });
 
 app.get("/api/inspections", async (req, res) => {
-  const { hiveId, offset, limit } = historyQuery.parse(req.query);
+  const { hiveId, from, to, offset, limit } = historyQuery.parse(req.query);
   const rows = await database()
     .select()
     .from(inspections)
-    .where(hiveId ? eq(inspections.hiveId, hiveId) : undefined)
+    .where(
+      and(
+        hiveId ? eq(inspections.hiveId, hiveId) : undefined,
+        from ? gte(inspections.inspectedAt, from) : undefined,
+        to ? lte(inspections.inspectedAt, to) : undefined,
+      ),
+    )
     .orderBy(
       desc(inspections.inspectedAt),
       desc(inspections.createdAt),
@@ -373,8 +436,7 @@ app.get("/api/inspections/:id/photo", async (req, res) => {
 });
 
 app.post("/api/team", async (req, res) => {
-  if (session(res).role !== "owner")
-    throw new HttpError(403, "เฉพาะเจ้าของฟาร์ม");
+  requireOwner(session(res));
   const { email } = teamInput.parse(req.body);
   if (email === bindings.OWNER_EMAIL?.trim().toLowerCase())
     throw new HttpError(400, "เจ้าของฟาร์มมีสิทธิ์อยู่แล้ว");
@@ -386,8 +448,7 @@ app.post("/api/team", async (req, res) => {
 });
 
 app.patch("/api/team/:email", async (req, res) => {
-  if (session(res).role !== "owner")
-    throw new HttpError(403, "เฉพาะเจ้าของฟาร์ม");
+  requireOwner(session(res));
   const email = z.email().parse(req.params.email).toLowerCase();
   const { active } = z.object({ active: z.boolean() }).parse(req.body);
   const [member] = await database()

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   AdminLayout,
   type AdminSection,
@@ -9,6 +9,7 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { Skeleton } from "../components/ui/Skeleton";
 import { Toast, type ToastMessage } from "../components/ui/Toast";
 import { DashboardSummary } from "../features/dashboard/DashboardSummary";
+import { BackupPanel } from "../features/backup/BackupPanel";
 import { HiveForm } from "../features/hives/HiveForm";
 import { HiveList } from "../features/hives/HiveList";
 import { HiveDetail } from "../features/hives/HiveDetail";
@@ -24,12 +25,12 @@ import {
   api,
   type Dashboard,
   type Harvest,
-  type HistoryPage,
   type Hive,
   type Inspection,
 } from "../lib/api";
 import { farmDate } from "../lib/date";
 import { prepareImage } from "../lib/image";
+import { useHistory } from "../lib/useHistory";
 
 const sections: AdminSection[] = [
   "hives",
@@ -64,15 +65,16 @@ export function AdminPage() {
   const [loadError, setLoadError] = useState("");
   const [busy, setBusy] = useState(false);
   const [savedVersion, setSavedVersion] = useState(0);
-  const [extraHarvests, setExtraHarvests] = useState<Harvest[]>([]);
-  const [extraInspections, setExtraInspections] = useState<Inspection[]>([]);
-  const [harvestNextOffset, setHarvestNextOffset] = useState<number | null>(null);
-  const [inspectionNextOffset, setInspectionNextOffset] = useState<number | null>(null);
-  const [harvestLoading, setHarvestLoading] = useState(false);
-  const [inspectionLoading, setInspectionLoading] = useState(false);
-  const [harvestLoadError, setHarvestLoadError] = useState("");
-  const [inspectionLoadError, setInspectionLoadError] = useState("");
-  const historyVersion = useRef(0);
+  const harvestHistory = useHistory<Harvest>(
+    "harvests",
+    data?.harvests,
+    data?.summary.harvestCount,
+  );
+  const inspectionHistory = useHistory<Inspection>(
+    "inspections",
+    data?.inspections,
+    data?.summary.inspectionCount,
+  );
   const closeNotice = useCallback(() => setNotice(null), []);
 
   useEffect(() => {
@@ -83,22 +85,7 @@ export function AdminPage() {
   }, []);
   const refresh = useCallback(async () => {
     const result = await api<Dashboard>(`/dashboard?month=${farmDate().slice(0, 7)}`);
-    historyVersion.current += 1;
     setData(result);
-    setExtraHarvests([]);
-    setExtraInspections([]);
-    setHarvestNextOffset(
-      result.summary.harvestCount > result.harvests.length
-        ? result.harvests.length
-        : null,
-    );
-    setInspectionNextOffset(
-      result.summary.inspectionCount > result.inspections.length
-        ? result.inspections.length
-        : null,
-    );
-    setHarvestLoadError("");
-    setInspectionLoadError("");
     setLoadError("");
   }, []);
   useEffect(() => {
@@ -148,52 +135,6 @@ export function AdminPage() {
   function hiveName(id: string) {
     const hive = data?.hives.find((item) => item.id === id);
     return hive ? `${hive.code} · ${hive.name}` : id;
-  }
-
-  async function loadMoreHarvests() {
-    if (harvestNextOffset === null || harvestLoading) return;
-    const version = historyVersion.current;
-    setHarvestLoading(true);
-    setHarvestLoadError("");
-    try {
-      const page = await api<HistoryPage<Harvest>>(
-        `/harvests?offset=${harvestNextOffset}&limit=50`,
-      );
-      if (version !== historyVersion.current) return;
-      setExtraHarvests((current) => {
-        const seen = new Set([...(data?.harvests ?? []), ...current].map((item) => item.id));
-        return [...current, ...page.items.filter((item) => !seen.has(item.id))];
-      });
-      setHarvestNextOffset(page.nextOffset);
-    } catch (cause) {
-      if (version === historyVersion.current)
-        setHarvestLoadError(cause instanceof Error ? cause.message : th.admin.loadFailed);
-    } finally {
-      setHarvestLoading(false);
-    }
-  }
-
-  async function loadMoreInspections() {
-    if (inspectionNextOffset === null || inspectionLoading) return;
-    const version = historyVersion.current;
-    setInspectionLoading(true);
-    setInspectionLoadError("");
-    try {
-      const page = await api<HistoryPage<Inspection>>(
-        `/inspections?offset=${inspectionNextOffset}&limit=50`,
-      );
-      if (version !== historyVersion.current) return;
-      setExtraInspections((current) => {
-        const seen = new Set([...(data?.inspections ?? []), ...current].map((item) => item.id));
-        return [...current, ...page.items.filter((item) => !seen.has(item.id))];
-      });
-      setInspectionNextOffset(page.nextOffset);
-    } catch (cause) {
-      if (version === historyVersion.current)
-        setInspectionLoadError(cause instanceof Error ? cause.message : th.admin.loadFailed);
-    } finally {
-      setInspectionLoading(false);
-    }
   }
 
   async function createHive(event: FormEvent<HTMLFormElement>) {
@@ -377,12 +318,9 @@ export function AdminPage() {
                 }
                 list={
                   <HarvestList
-                    harvests={[...data.harvests, ...extraHarvests]}
+                    history={harvestHistory}
                     hiveName={hiveName}
-                    hasMore={harvestNextOffset !== null}
-                    loadingMore={harvestLoading}
-                    loadError={harvestLoadError}
-                    onLoadMore={loadMoreHarvests}
+                    resetToken={savedVersion}
                   />
                 }
               />
@@ -403,15 +341,11 @@ export function AdminPage() {
                 }
                 list={
                   <InspectionList
-                    inspections={[...data.inspections, ...extraInspections]}
+                    history={inspectionHistory}
                     hiveName={hiveName}
                     busy={busy}
                     onUpload={uploadInspectionPhoto}
                     savedVersion={savedVersion}
-                    hasMore={inspectionNextOffset !== null}
-                    loadingMore={inspectionLoading}
-                    loadError={inspectionLoadError}
-                    onLoadMore={loadMoreInspections}
                   />
                 }
               />
@@ -423,11 +357,14 @@ export function AdminPage() {
                 savedVersion={savedVersion}
                 form={<TeamForm busy={busy} onSubmit={createTeam} />}
                 list={
-                  <TeamList
-                    team={data.team}
-                    busy={busy}
-                    onToggle={toggleTeam}
-                  />
+                  <div className="space-y-6">
+                    <TeamList
+                      team={data.team}
+                      busy={busy}
+                      onToggle={toggleTeam}
+                    />
+                    <BackupPanel />
+                  </div>
                 }
               />
             )}

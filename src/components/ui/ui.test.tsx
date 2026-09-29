@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { Field } from "./Field";
 import { Input } from "./Input";
 import { LoadMore } from "./LoadMore";
+import { DateRangeFilter } from "./DateRangeFilter";
+import { BackupPanel } from "../../features/backup/BackupPanel";
 import { StatusBadge } from "../../features/hives/StatusBadge";
 
 describe("shared accessible controls", () => {
@@ -31,5 +33,27 @@ describe("shared accessible controls", () => {
       <LoadMore hasMore loading={false} error="" onClick={() => {}} />,
     );
     expect(html).toContain("แสดงรายการเพิ่มเติม");
+  });
+
+  it("labels both date filter fields", () => {
+    const html = renderToStaticMarkup(
+      <DateRangeFilter
+        range={null}
+        loading={false}
+        error=""
+        resetToken={0}
+        onApply={() => {}}
+        onClear={() => {}}
+      />,
+    );
+    expect(html).toContain("ตั้งแต่วันที่");
+    expect(html).toContain("ถึงวันที่");
+    expect(html).toContain('type="date"');
+  });
+
+  it("states that the JSON export excludes photo files", () => {
+    const html = renderToStaticMarkup(<BackupPanel />);
+    expect(html).toContain("ไม่รวมรูปถ่าย");
+    expect(html).toContain("ดาวน์โหลด JSON");
   });
 });

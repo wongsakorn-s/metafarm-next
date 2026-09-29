@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ButtonLink } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
+import { DateRangeFilter } from "../../components/ui/DateRangeFilter";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { LoadMore } from "../../components/ui/LoadMore";
@@ -8,46 +9,36 @@ import { th } from "../../i18n/th";
 import {
   api,
   type Harvest,
-  type HistoryPage,
   type HiveDetailData,
   type Inspection,
 } from "../../lib/api";
 import { formatFarmDate, formatFarmNumber } from "../../lib/date";
+import { useHistory } from "../../lib/useHistory";
 import { StatusBadge } from "./StatusBadge";
 
 export function HiveDetail({ hiveId }: { hiveId: string }) {
   const [data, setData] = useState<HiveDetailData | null>(null);
   const [error, setError] = useState("");
-  const [extraHarvests, setExtraHarvests] = useState<Harvest[]>([]);
-  const [extraInspections, setExtraInspections] = useState<Inspection[]>([]);
-  const [harvestNextOffset, setHarvestNextOffset] = useState<number | null>(null);
-  const [inspectionNextOffset, setInspectionNextOffset] = useState<number | null>(null);
-  const [harvestLoading, setHarvestLoading] = useState(false);
-  const [inspectionLoading, setInspectionLoading] = useState(false);
-  const [harvestLoadError, setHarvestLoadError] = useState("");
-  const [inspectionLoadError, setInspectionLoadError] = useState("");
+  const harvestHistory = useHistory<Harvest>(
+    "harvests",
+    data?.harvests,
+    data?.totals.harvestCount,
+    hiveId,
+  );
+  const inspectionHistory = useHistory<Inspection>(
+    "inspections",
+    data?.inspections,
+    data?.totals.inspectionCount,
+    hiveId,
+  );
 
   useEffect(() => {
     let active = true;
     setData(null);
     setError("");
-    setExtraHarvests([]);
-    setExtraInspections([]);
     api<HiveDetailData>(`/hives/${hiveId}`)
       .then((result) => {
-        if (active) {
-          setData(result);
-          setHarvestNextOffset(
-            result.totals.harvestCount > result.harvests.length
-              ? result.harvests.length
-              : null,
-          );
-          setInspectionNextOffset(
-            result.totals.inspectionCount > result.inspections.length
-              ? result.inspections.length
-              : null,
-          );
-        }
+        if (active) setData(result);
       })
       .catch((cause: unknown) => {
         if (active)
@@ -60,53 +51,13 @@ export function HiveDetail({ hiveId }: { hiveId: string }) {
     };
   }, [hiveId]);
 
-  async function loadMoreHarvests() {
-    if (!data || harvestNextOffset === null || harvestLoading) return;
-    setHarvestLoading(true);
-    setHarvestLoadError("");
-    try {
-      const page = await api<HistoryPage<Harvest>>(
-        `/harvests?hiveId=${encodeURIComponent(hiveId)}&offset=${harvestNextOffset}&limit=50`,
-      );
-      setExtraHarvests((current) => {
-        const seen = new Set([...data.harvests, ...current].map((item) => item.id));
-        return [...current, ...page.items.filter((item) => !seen.has(item.id))];
-      });
-      setHarvestNextOffset(page.nextOffset);
-    } catch (cause) {
-      setHarvestLoadError(cause instanceof Error ? cause.message : th.admin.loadFailed);
-    } finally {
-      setHarvestLoading(false);
-    }
-  }
-
-  async function loadMoreInspections() {
-    if (!data || inspectionNextOffset === null || inspectionLoading) return;
-    setInspectionLoading(true);
-    setInspectionLoadError("");
-    try {
-      const page = await api<HistoryPage<Inspection>>(
-        `/inspections?hiveId=${encodeURIComponent(hiveId)}&offset=${inspectionNextOffset}&limit=50`,
-      );
-      setExtraInspections((current) => {
-        const seen = new Set([...data.inspections, ...current].map((item) => item.id));
-        return [...current, ...page.items.filter((item) => !seen.has(item.id))];
-      });
-      setInspectionNextOffset(page.nextOffset);
-    } catch (cause) {
-      setInspectionLoadError(cause instanceof Error ? cause.message : th.admin.loadFailed);
-    } finally {
-      setInspectionLoading(false);
-    }
-  }
-
   if (error)
     return <EmptyState title={th.admin.loadFailed} description={error} />;
   if (!data) return <Skeleton />;
 
   const { hive, totals } = data;
-  const harvests = [...data.harvests, ...extraHarvests];
-  const inspections = [...data.inspections, ...extraInspections];
+  const harvests = harvestHistory.items;
+  const inspections = inspectionHistory.items;
   const hiveQuery = `?hive=${encodeURIComponent(hive.id)}`;
   return (
     <div className="space-y-6">
@@ -169,6 +120,14 @@ export function HiveDetail({ hiveId }: { hiveId: string }) {
           <h2 className="mb-3 text-lg font-bold">
             {th.admin.inspections} ({formatFarmNumber(totals.inspectionCount)})
           </h2>
+          <DateRangeFilter
+            range={inspectionHistory.range}
+            loading={inspectionHistory.loading}
+            error={inspectionHistory.errorSource === "filter" ? inspectionHistory.error : ""}
+            resetToken={hiveId}
+            onApply={inspectionHistory.applyFilter}
+            onClear={inspectionHistory.clearFilter}
+          />
           <div className="space-y-3">
             {inspections.length ? (
               inspections.map((record) => (
@@ -199,14 +158,14 @@ export function HiveDetail({ hiveId }: { hiveId: string }) {
             ) : (
               <EmptyState
                 title={th.common.noData}
-                description={th.admin.firstInspection}
+                description={inspectionHistory.range ? th.admin.noHistoryMatch : th.admin.firstInspection}
               />
             )}
             <LoadMore
-              hasMore={inspectionNextOffset !== null}
-              loading={inspectionLoading}
-              error={inspectionLoadError}
-              onClick={loadMoreInspections}
+              hasMore={inspectionHistory.hasMore}
+              loading={inspectionHistory.loading}
+              error={inspectionHistory.errorSource === "more" ? inspectionHistory.error : ""}
+              onClick={inspectionHistory.loadMore}
             />
           </div>
         </section>
@@ -214,6 +173,14 @@ export function HiveDetail({ hiveId }: { hiveId: string }) {
           <h2 className="mb-3 text-lg font-bold">
             {th.admin.harvests} ({formatFarmNumber(totals.harvestCount)})
           </h2>
+          <DateRangeFilter
+            range={harvestHistory.range}
+            loading={harvestHistory.loading}
+            error={harvestHistory.errorSource === "filter" ? harvestHistory.error : ""}
+            resetToken={hiveId}
+            onApply={harvestHistory.applyFilter}
+            onClear={harvestHistory.clearFilter}
+          />
           <div className="space-y-3">
             {harvests.length ? (
               harvests.map((record) => (
@@ -234,14 +201,14 @@ export function HiveDetail({ hiveId }: { hiveId: string }) {
             ) : (
               <EmptyState
                 title={th.common.noData}
-                description={th.admin.firstHarvest}
+                description={harvestHistory.range ? th.admin.noHistoryMatch : th.admin.firstHarvest}
               />
             )}
             <LoadMore
-              hasMore={harvestNextOffset !== null}
-              loading={harvestLoading}
-              error={harvestLoadError}
-              onClick={loadMoreHarvests}
+              hasMore={harvestHistory.hasMore}
+              loading={harvestHistory.loading}
+              error={harvestHistory.errorSource === "more" ? harvestHistory.error : ""}
+              onClick={harvestHistory.loadMore}
             />
           </div>
         </section>

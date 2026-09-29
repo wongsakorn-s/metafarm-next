@@ -18,6 +18,12 @@ type HiveDetail = {
   totals: { honeyMl: number; propolisG: number; inspectionCount: number };
 };
 type Page = { items: CreatedRecord[]; nextOffset: number | null };
+type ExportData = {
+  photosIncluded: boolean;
+  hives: HiveRecord[];
+  harvests: Array<CreatedRecord & { hiveId: string }>;
+  inspections: Array<CreatedRecord & { hiveId: string }>;
+};
 
 async function request<T>(path: string, method = "GET", body?: object): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, {
@@ -69,6 +75,17 @@ try {
   const harvestPage = await request<Page>(`/harvests?hiveId=${hiveId}&limit=1`);
   assert.equal(harvestPage.items.length, 1);
   assert.equal(harvestPage.nextOffset, null);
+  const filteredHarvests = await request<Page>(
+    `/harvests?hiveId=${hiveId}&from=${today}&to=${today}`,
+  );
+  assert.equal(filteredHarvests.items.length, 1);
+  const laterDay = new Date(Date.parse(`${today}T00:00:00Z`) + 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  const emptyHarvests = await request<Page>(
+    `/harvests?hiveId=${hiveId}&from=${laterDay}`,
+  );
+  assert.equal(emptyHarvests.items.length, 0);
   const firstPage = await request<Page>(`/inspections?hiveId=${hiveId}&limit=1`);
   assert.equal(firstPage.items.length, 1);
   assert.equal(firstPage.nextOffset, 1);
@@ -76,6 +93,13 @@ try {
   assert.equal(nextPage.items.length, 1);
   assert.equal(nextPage.nextOffset, null);
   assert.notEqual(firstPage.items[0].id, nextPage.items[0].id);
+  const exported = await request<ExportData>(
+    `/export?from=${today}&to=${today}`,
+  );
+  assert.equal(exported.photosIncluded, false);
+  assert.ok(exported.hives.some((item) => item.id === hiveId));
+  assert.equal(exported.harvests.filter((item) => item.hiveId === hiveId).length, 1);
+  assert.equal(exported.inspections.filter((item) => item.hiveId === hiveId).length, 2);
   console.log("Local API smoke test passed");
 } finally {
   if (hiveId) {

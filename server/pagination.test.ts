@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { historyQuery, pageResult } from "./pagination";
+import { dateRangeQuery, historyQuery, pageResult } from "./pagination";
 
 describe("history pagination", () => {
   it("defaults to a bounded first page", () => {
     expect(historyQuery.parse({})).toEqual({ offset: 0, limit: 50 });
     expect(() => historyQuery.parse({ limit: "101" })).toThrow();
     expect(() => historyQuery.parse({ offset: "-1" })).toThrow();
+    expect(() => historyQuery.parse({ from: "2026-09-30", to: "2026-09-01" })).toThrow();
+    expect(historyQuery.parse({ from: "2026-09-01", to: "2026-09-30" })).toMatchObject({
+      from: "2026-09-01",
+      to: "2026-09-30",
+    });
+    expect(() => dateRangeQuery.parse({ from: "2026-10-01", to: "2026-09-30" })).toThrow();
   });
 
   it("returns a next offset only when another page exists", () => {
