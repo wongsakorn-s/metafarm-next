@@ -1,5 +1,4 @@
 import { useState, type FormEvent } from "react";
-import { canEditHistoryRecord } from "../../../shared/historyPermissions";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
@@ -8,7 +7,7 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { LoadMore } from "../../components/ui/LoadMore";
 import { Sheet } from "../../components/ui/Sheet";
 import { th } from "../../i18n/th";
-import type { Harvest, Hive, Staff } from "../../lib/api";
+import type { Harvest, Hive } from "../../lib/api";
 import { formatFarmDate, formatFarmNumber } from "../../lib/date";
 import type { HistoryView } from "../../lib/useHistory";
 import { HarvestForm } from "./HarvestForm";
@@ -16,9 +15,7 @@ import { HarvestForm } from "./HarvestForm";
 export function HarvestList({
   history,
   hiveName,
-  resetToken,
   hives,
-  actor,
   busy,
   today,
   onEdit,
@@ -26,9 +23,7 @@ export function HarvestList({
 }: {
   history: HistoryView<Harvest>;
   hiveName: (id: string) => string;
-  resetToken: number;
   hives: Hive[];
-  actor: Staff;
   busy: boolean;
   today: string;
   onEdit: (id: string, event: FormEvent<HTMLFormElement>) => Promise<boolean>;
@@ -39,20 +34,16 @@ export function HarvestList({
   const [pendingDelete, setPendingDelete] = useState<Harvest | null>(null);
 
   function actions(record: Harvest) {
-    const editable = canEditHistoryRecord(
-      actor,
-      record.createdByEmail,
-      new Date(record.createdAt),
-    );
-    if (!editable && actor.role !== "owner") return null;
+    const { canEdit, canDelete } = record.permissions;
+    if (!canEdit && !canDelete) return null;
     return (
       <div className="flex flex-wrap gap-2">
-        {editable && (
+        {canEdit && (
           <Button variant="outline" disabled={busy} onClick={() => setEditing(record)}>
             {th.admin.editHarvest}
           </Button>
         )}
-        {actor.role === "owner" && (
+        {canDelete && (
           <Button variant="outline" disabled={busy} onClick={() => setPendingDelete(record)}>
             {th.admin.deleteHarvest}
           </Button>
@@ -68,7 +59,7 @@ export function HarvestList({
         range={history.range}
         loading={history.loading}
         error={history.errorSource === "filter" ? history.error : ""}
-        resetToken={resetToken}
+        resetToken="harvests"
         onApply={history.applyFilter}
         onClear={history.clearFilter}
       />

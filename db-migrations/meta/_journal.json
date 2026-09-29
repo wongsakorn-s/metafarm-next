@@ -15,6 +15,13 @@
       "when": 1790701745023,
       "tag": "0001_pink_legion",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790703982693,
+      "tag": "0002_living_sleepwalker",
+      "breakpoints": true
     }
   ]
 }

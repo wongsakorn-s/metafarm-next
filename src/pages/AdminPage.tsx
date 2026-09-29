@@ -180,7 +180,7 @@ export function AdminPage() {
       });
     });
   }
-  async function mutateHarvest(action: () => Promise<unknown>): Promise<boolean> {
+  async function mutateRecord(action: () => Promise<unknown>): Promise<boolean> {
     setBusy(true);
     setNotice(null);
     try {
@@ -202,7 +202,7 @@ export function AdminPage() {
   async function editHarvest(id: string, event: FormEvent<HTMLFormElement>): Promise<boolean> {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget));
-    return mutateHarvest(() => api(`/harvests/${id}`, {
+    return mutateRecord(() => api(`/harvests/${id}`, {
       method: "PATCH",
       body: JSON.stringify({
         ...values,
@@ -212,7 +212,28 @@ export function AdminPage() {
     }));
   }
   async function deleteHarvest(id: string): Promise<boolean> {
-    return mutateHarvest(() => api(`/harvests/${id}`, { method: "DELETE" }));
+    return mutateRecord(() => api(`/harvests/${id}`, { method: "DELETE" }));
+  }
+  async function editInspection(id: string, event: FormEvent<HTMLFormElement>): Promise<boolean> {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    return mutateRecord(() => api(`/inspections/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        inspectedAt: values.inspectedAt,
+        status: values.status,
+        notes: values.notes,
+      }),
+    }));
+  }
+  async function deleteInspection(id: string): Promise<boolean> {
+    return mutateRecord(() => api(`/inspections/${id}`, { method: "DELETE" }));
+  }
+  async function archiveHive(id: string): Promise<boolean> {
+    return mutateRecord(() => api(`/hives/${id}/archive`, { method: "POST" }));
+  }
+  async function restoreHive(id: string): Promise<boolean> {
+    return mutateRecord(() => api(`/hives/${id}/restore`, { method: "POST" }));
   }
   async function createInspection(event: FormEvent<HTMLFormElement>) {
     const form = event.currentTarget;
@@ -331,7 +352,18 @@ export function AdminPage() {
           <div className="order-1 lg:order-2">
             {section === "hives" &&
               (detailHiveId ? (
-                <HiveDetail hiveId={detailHiveId} />
+                <HiveDetail
+                  hiveId={detailHiveId}
+                  owner={data.staff.role === "owner"}
+                  hives={data.hives}
+                  today={today}
+                  busy={busy}
+                  savedVersion={savedVersion}
+                  onEditHarvest={editHarvest}
+                  onDeleteHarvest={deleteHarvest}
+                  onEditInspection={editInspection}
+                  onDeleteInspection={deleteInspection}
+                />
               ) : (
                 <FeaturePanel
                   title={th.admin.addHive}
@@ -343,6 +375,10 @@ export function AdminPage() {
                       hives={data.hives}
                       busy={busy}
                       onUpdate={updateHive}
+                      owner={data.staff.role === "owner"}
+                      savedVersion={savedVersion}
+                      onArchive={archiveHive}
+                      onRestore={restoreHive}
                     />
                   }
                 />
@@ -365,9 +401,7 @@ export function AdminPage() {
                   <HarvestList
                     history={harvestHistory}
                     hiveName={hiveName}
-                    resetToken={savedVersion}
                     hives={data.hives}
-                    actor={data.staff}
                     busy={busy}
                     today={today}
                     onEdit={editHarvest}
@@ -394,7 +428,11 @@ export function AdminPage() {
                   <InspectionList
                     history={inspectionHistory}
                     hiveName={hiveName}
+                    hives={data.hives}
+                    today={today}
                     busy={busy}
+                    onEdit={editInspection}
+                    onDelete={deleteInspection}
                     onUpload={uploadInspectionPhoto}
                     savedVersion={savedVersion}
                   />

@@ -28,18 +28,8 @@ export function useHistory<T extends { id: string }>(
   const [error, setError] = useState("");
   const [errorSource, setErrorSource] = useState<"filter" | "more" | null>(null);
   const requestVersion = useRef(0);
-
-  useEffect(() => {
-    requestVersion.current += 1;
-    setItems(initialItems ?? []);
-    setNextOffset(
-      initialItems && initialTotal > initialItems.length ? initialItems.length : null,
-    );
-    setRange(null);
-    setLoading(false);
-    setError("");
-    setErrorSource(null);
-  }, [initialItems, initialTotal, hiveId]);
+  const rangeRef = useRef<DateRange | null>(null);
+  const previousHiveId = useRef(hiveId);
 
   function query(offset: number, selectedRange: DateRange | null) {
     const params = new URLSearchParams({ offset: String(offset), limit: "50" });
@@ -48,6 +38,39 @@ export function useHistory<T extends { id: string }>(
     if (selectedRange?.to) params.set("to", selectedRange.to);
     return `/${endpoint}?${params}`;
   }
+
+  useEffect(() => {
+    const version = ++requestVersion.current;
+    const selectedRange = previousHiveId.current === hiveId ? rangeRef.current : null;
+    previousHiveId.current = hiveId;
+    if (!selectedRange) rangeRef.current = null;
+    setLoading(false);
+    setError("");
+    setErrorSource(null);
+    if (!selectedRange) {
+      setItems(initialItems ?? []);
+      setNextOffset(
+        initialItems && initialTotal > initialItems.length ? initialItems.length : null,
+      );
+      setRange(null);
+      return;
+    }
+    setLoading(true);
+    api<HistoryPage<T>>(query(0, selectedRange))
+      .then((page) => {
+        if (version !== requestVersion.current) return;
+        setItems(page.items);
+        setNextOffset(page.nextOffset);
+      })
+      .catch((cause: unknown) => {
+        if (version !== requestVersion.current) return;
+        setError(cause instanceof Error ? cause.message : th.admin.loadFailed);
+        setErrorSource("filter");
+      })
+      .finally(() => {
+        if (version === requestVersion.current) setLoading(false);
+      });
+  }, [initialItems, initialTotal, hiveId]);
 
   async function applyFilter(selectedRange: DateRange) {
     if (!selectedRange.from && !selectedRange.to) {
@@ -68,6 +91,7 @@ export function useHistory<T extends { id: string }>(
       if (version !== requestVersion.current) return;
       setItems(page.items);
       setNextOffset(page.nextOffset);
+      rangeRef.current = selectedRange;
       setRange(selectedRange);
     } catch (cause) {
       if (version === requestVersion.current) {
@@ -81,6 +105,7 @@ export function useHistory<T extends { id: string }>(
 
   function clearFilter() {
     requestVersion.current += 1;
+    rangeRef.current = null;
     setItems(initialItems ?? []);
     setNextOffset(
       initialItems && initialTotal > initialItems.length ? initialItems.length : null,

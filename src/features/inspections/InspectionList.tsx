@@ -1,32 +1,44 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { DateRangeFilter } from "../../components/ui/DateRangeFilter";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { LoadMore } from "../../components/ui/LoadMore";
 import { Sheet } from "../../components/ui/Sheet";
 import { StatusBadge } from "../hives/StatusBadge";
 import { th } from "../../i18n/th";
-import type { Inspection } from "../../lib/api";
+import type { Hive, Inspection } from "../../lib/api";
 import type { HistoryView } from "../../lib/useHistory";
 import { formatFarmDate } from "../../lib/date";
 import { PhotoUpload } from "./PhotoUpload";
+import { InspectionForm } from "./InspectionForm";
 
 export function InspectionList({
   history,
   hiveName,
   busy,
+  hives,
+  today,
+  onEdit,
+  onDelete,
   onUpload,
   savedVersion,
 }: {
   history: HistoryView<Inspection>;
   hiveName: (id: string) => string;
   busy: boolean;
+  hives: Hive[];
+  today: string;
+  onEdit: (id: string, event: FormEvent<HTMLFormElement>) => Promise<boolean>;
+  onDelete: (id: string) => Promise<boolean>;
   onUpload: (event: FormEvent<HTMLFormElement>, id: string) => void;
   savedVersion: number;
 }) {
   const inspections = history.items;
   const [photoRecordId, setPhotoRecordId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Inspection | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Inspection | null>(null);
   const previousVersion = useRef(savedVersion);
   useEffect(() => {
     if (previousVersion.current !== savedVersion) setPhotoRecordId(null);
@@ -40,7 +52,7 @@ export function InspectionList({
         range={history.range}
         loading={history.loading}
         error={history.errorSource === "filter" ? history.error : ""}
-        resetToken={savedVersion}
+        resetToken="inspections"
         onApply={history.applyFilter}
         onClear={history.clearFilter}
       />
@@ -77,12 +89,23 @@ export function InspectionList({
             </a>
           )}
           <div className="mt-4 border-t border-stone-100 pt-4">
-            <Button
-              variant="outline"
-              onClick={() => setPhotoRecordId(record.id)}
-            >
-              {record.imageKey ? th.admin.photoReplace : th.admin.photoAdd}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              {record.permissions.canEdit && (
+                <>
+                  <Button variant="outline" disabled={busy} onClick={() => setEditing(record)}>
+                    {th.admin.editInspection}
+                  </Button>
+                  <Button variant="outline" disabled={busy} onClick={() => setPhotoRecordId(record.id)}>
+                    {record.imageKey ? th.admin.photoReplace : th.admin.photoAdd}
+                  </Button>
+                </>
+              )}
+              {record.permissions.canDelete && (
+                <Button variant="outline" disabled={busy} onClick={() => setPendingDelete(record)}>
+                  {th.admin.deleteInspection}
+                </Button>
+              )}
+            </div>
           </div>
         </Card>
       ))}
@@ -111,6 +134,32 @@ export function InspectionList({
           </form>
         )}
       </Sheet>
+      <Sheet open={editing !== null} onClose={() => setEditing(null)} title={th.admin.editInspection}>
+        {editing && (
+          <InspectionForm
+            key={editing.id}
+            initial={editing}
+            hives={hives}
+            today={today}
+            busy={busy}
+            onSubmit={async (event) => {
+              if (await onEdit(editing.id, event)) setEditing(null);
+            }}
+          />
+        )}
+      </Sheet>
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={th.admin.confirmDeleteInspection}
+        description={th.admin.deleteInspectionWarning}
+        confirmLabel={th.admin.deleteInspection}
+        destructive
+        busy={busy}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={async () => {
+          if (pendingDelete && await onDelete(pendingDelete.id)) setPendingDelete(null);
+        }}
+      />
     </div>
   );
 }

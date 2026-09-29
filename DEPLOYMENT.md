@@ -1,5 +1,13 @@
 # Deploy บน Free Tier
 
+> งาน Phase 1–6 รอบปัจจุบันห้ามแตะ production database/bucket และห้าม deploy production แม้ workflow เก่าจะรองรับการ deploy อยู่ ขั้นตอนด้านล่างเป็นบันทึกของระบบเดิม ไม่ใช่คำอนุมัติให้รันในรอบนี้
+
+## Migration Phase 2 และแนวทาง rollback
+
+`db-migrations/0002_living_sleepwalker.sql` เพิ่มคอลัมน์แบบ nullable และตาราง `audit_logs` พร้อมดัชนี ต้องรัน migration ก่อน deploy Worker เวอร์ชันที่อ่านคอลัมน์เหล่านี้ ใช้เฉพาะ Neon development หรือ staging branch ที่ผ่านตัวตรวจเป้าหมายเท่านั้น; production ต้องรออนุมัติแยก
+
+หาก Worker ใหม่มีปัญหา ให้หยุดการเขียนข้อมูลและแก้ Worker โดยคง schema ใหม่ไว้ก่อน อย่าย้อนเป็น Worker รุ่นเก่าตรง ๆ เพราะรุ่นเก่าไม่กรอง `deleted_at` และอาจทำให้รายการที่ลบไปกลับมาแสดง การย้อน schema จริงต้องสำรองทั้งฐานข้อมูลและ audit ก่อน แล้วจึงพิจารณา drop คอลัมน์/ตารางที่เพิ่มใน migration นี้โดยเจ้าของอนุมัติ เนื่องจากขั้นตอนนั้นทำลายประวัติการแก้ไขและข้อมูล soft delete
+
 การ deploy frontend และ Express API จบใน Cloudflare Workers ครั้งเดียว โดยใช้ Neon PostgreSQL เป็นฐานข้อมูลภายนอก หลังเตรียม Neon, R2, Access และ secrets ครั้งแรกแล้ว GitHub Actions `Deploy production` จะตรวจโค้ด → ทดสอบ → migrate PostgreSQL → build → deploy ใน workflow เดียว
 
 ## สถานะการเตรียมระบบ (29 กันยายน 2026)

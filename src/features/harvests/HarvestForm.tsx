@@ -30,19 +30,26 @@ export function HarvestForm({
         </h2>
         <Field label={th.admin.hive} required>
           {(id) => (
-            <Select
-              id={id}
-              required
-              name="hiveId"
-              defaultValue={initial?.hiveId ?? defaultHiveId ?? ""}
-            >
-              <option value="">{th.admin.selectHive}</option>
-              {hives.map((hive) => (
-                <option key={hive.id} value={hive.id}>
-                  {hive.code} · {hive.name}
-                </option>
-              ))}
-            </Select>
+            <>
+              <Select
+                id={id}
+                required
+                name={initial ? undefined : "hiveId"}
+                disabled={Boolean(initial)}
+                defaultValue={initial?.hiveId ?? defaultHiveId ?? ""}
+              >
+                <option value="">{th.admin.selectHive}</option>
+                {initial && !hives.some((hive) => hive.id === initial.hiveId) && (
+                  <option value={initial.hiveId}>{initial.hiveId}</option>
+                )}
+                {hives.map((hive) => (
+                  <option key={hive.id} value={hive.id}>
+                    {hive.code} · {hive.name}
+                  </option>
+                ))}
+              </Select>
+              {initial && <input type="hidden" name="hiveId" value={initial.hiveId} />}
+            </>
           )}
         </Field>
         <Field label={th.admin.harvestDate} required>
@@ -88,13 +95,13 @@ export function HarvestForm({
         </Field>
         <Button
           type="submit"
-          disabled={busy || !hives.length}
+          disabled={busy || (!initial && !hives.length)}
           full
           className="sticky bottom-0 z-10 shadow-float lg:static lg:shadow-none"
         >
           {busy ? th.common.saving : initial ? th.admin.saveEdit : th.admin.addHarvest}
         </Button>
-        {!hives.length && (
+        {!hives.length && !initial && (
           <p className="text-sm text-warning-700">{th.admin.needHiveHarvest}</p>
         )}
       </form>

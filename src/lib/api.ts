@@ -8,7 +8,9 @@ export type Hive = {
   species: string | null;
   location: string | null;
   status: string;
+  archivedAt: string | null;
 };
+export type RecordPermissions = { canEdit: boolean; canDelete: boolean };
 export type Harvest = {
   id: string;
   hiveId: string;
@@ -17,6 +19,11 @@ export type Harvest = {
   propolisG: number;
   createdByEmail: string | null;
   createdAt: string;
+  createdBy: string | null;
+  updatedAt: string | null;
+  updatedBy: string | null;
+  deletedAt: string | null;
+  permissions: RecordPermissions;
 };
 export type Inspection = {
   id: string;
@@ -25,6 +32,22 @@ export type Inspection = {
   status: string;
   notes: string | null;
   imageKey: string | null;
+  createdAt: string;
+  createdBy: string | null;
+  updatedAt: string | null;
+  updatedBy: string | null;
+  deletedAt: string | null;
+  permissions: RecordPermissions;
+};
+export type AuditEntry = {
+  id: string;
+  actorEmail: string;
+  action: "create" | "update" | "delete" | "archive" | "restore";
+  entity: "hive" | "harvest" | "inspection" | "team";
+  entityId: string;
+  before: unknown;
+  after: unknown;
+  createdAt: string;
 };
 export type HistoryPage<T> = { items: T[]; nextOffset: number | null };
 export type HiveDetailData = {
