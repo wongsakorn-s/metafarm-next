@@ -8,6 +8,9 @@
 body {
   margin: 0;
 }
+html {
+  scroll-behavior: smooth;
+}
 button,
 input,
 select,
@@ -57,7 +60,9 @@ textarea {
   text-transform: uppercase;
 }
 .public-nav-link {
-  display: block;
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
   border-radius: 999px;
   padding: 0.6rem 0.85rem;
   color: #315242;
@@ -74,7 +79,6 @@ textarea {
 }
 .public-button-outline,
 .public-button-solid {
-  display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.65rem;
@@ -94,6 +98,7 @@ textarea {
   background: #e6ede3;
 }
 .public-button-solid {
+  display: inline-flex;
   background: #173e30;
   color: white;
   padding: 0.95rem 1.4rem;
@@ -112,8 +117,8 @@ textarea {
   font-weight: 700;
 }
 .public-text-link:hover {
-  color: #ad742d;
-  border-color: #ad742d;
+  color: #855517;
+  border-color: #855517;
 }
 .public-feature {
   display: block;
@@ -126,13 +131,48 @@ textarea {
   box-shadow: 0 18px 40px #173e3024;
 }
 .public-footer-link {
-  display: block;
+  display: flex;
   width: fit-content;
-  margin-top: 0.75rem;
+  min-height: 44px;
+  align-items: center;
   color: #d6e1d9;
 }
 .public-footer-link:hover {
   color: #ddbb70;
+}
+.public-video-control {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  place-items: center;
+  border: 1px solid #ffffffb8;
+  border-radius: 50%;
+  background: #173e30cc;
+  color: white;
+  cursor: pointer;
+}
+.public-video-control:hover {
+  background: #173e30;
+}
+.skip-link {
+  position: fixed;
+  z-index: 100;
+  top: 0.75rem;
+  left: 0.75rem;
+  transform: translateY(-150%);
+  border-radius: 0.35rem;
+  background: #173e30;
+  padding: 0.75rem 1rem;
+  color: white;
+  font-weight: 700;
+}
+.skip-link:focus {
+  transform: translateY(0);
+}
+:where(a, button, input, select, textarea, summary):focus-visible {
+  outline: 3px solid #b47c35;
+  outline-offset: 3px;
 }
 @media (min-width: 768px) {
   .public-section {
@@ -140,6 +180,15 @@ textarea {
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
   .public-feature,
   .public-button-solid {
     transition: none;

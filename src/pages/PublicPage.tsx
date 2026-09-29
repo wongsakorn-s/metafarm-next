@@ -1,9 +1,17 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { publicRoutes, resolvePublicPath } from "./publicRoutes";
 
 function Header({ path }: { path: string }) {
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [open]);
   const links = publicRoutes.map((route) => (
     <a
       key={route.path}
@@ -45,28 +53,26 @@ function Header({ path }: { path: string }) {
           </button>
         </div>
       </div>
-      {open && (
-        <nav
-          id="public-mobile-nav"
-          aria-label="เมนูมือถือ"
-          className="grid gap-1 border-t border-[#dcded3] bg-[#f8f8f2] px-5 py-4 shadow-xl xl:hidden"
+      <nav
+        id="public-mobile-nav"
+        aria-label="เมนูมือถือ"
+        className={`${open ? "grid" : "hidden"} gap-1 border-t border-[#dcded3] bg-[#f8f8f2] px-5 py-4 shadow-xl xl:hidden`}
+      >
+        {links}
+        <a
+          href="/admin"
+          className="public-nav-link mt-2 border-t border-[#dcded3] pt-4 sm:hidden"
         >
-          {links}
-          <a
-            href="/admin"
-            className="public-nav-link mt-2 border-t border-[#dcded3] pt-4 sm:hidden"
-          >
-            สำหรับทีมงาน ↗
-          </a>
-        </nav>
-      )}
+          สำหรับทีมงาน ↗
+        </a>
+      </nav>
     </header>
   );
 }
 
 function Footer() {
   return (
-    <footer className="mt-24 bg-[#173e30] text-[#f8f8f2]">
+    <footer className="bg-[#173e30] text-[#f8f8f2]">
       <div className="mx-auto grid max-w-[1440px] gap-12 px-5 py-14 md:grid-cols-[1.2fr_1fr] md:px-10 md:py-20">
         <div>
           <p className="public-eyebrow text-[#ddbb70]">
@@ -129,12 +135,12 @@ function Intro({
 }: {
   eyebrow: string;
   title: string;
-  children: ReactNode;
+  children?: ReactNode;
   secondary?: boolean;
 }) {
   return (
     <div className="max-w-3xl">
-      <p className="public-eyebrow text-[#ad742d]">{eyebrow}</p>
+      <p className="public-eyebrow text-[#855517]">{eyebrow}</p>
       {secondary ? (
         <h2 className="mt-4 text-[clamp(2.25rem,5vw,4.25rem)] font-semibold leading-[1.15] tracking-[-.035em] text-[#173e30]">
           {title}
@@ -163,15 +169,35 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
 }
 
 function Home() {
+  const reduceMotion = window.matchMedia(
+    "(prefers-reduced-motion: reduce)",
+  ).matches;
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [playing, setPlaying] = useState(!reduceMotion);
+
+  async function toggleVideo() {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) {
+      try {
+        await video.play();
+      } catch {
+        setPlaying(false);
+      }
+    } else {
+      video.pause();
+    }
+  }
+
   return (
-    <main>
+    <main id="main-content" tabIndex={-1}>
       <section className="overflow-hidden bg-[#f2f0e7]">
         <div className="mx-auto grid max-w-[1440px] lg:min-h-[690px] lg:grid-cols-[.92fr_1.08fr]">
           <div className="flex flex-col justify-center px-5 py-16 md:px-10 lg:py-24">
-            <p className="public-eyebrow text-[#ad742d]">
+            <p className="public-eyebrow text-[#855517]">
               MetaFarm · Nong Rai, Rayong
             </p>
-            <h1 className="mt-7 max-w-[680px] text-[clamp(3.25rem,6.5vw,6.75rem)] font-semibold leading-[1.05] tracking-[-.055em] text-[#173e30]">
+            <h1 className="mt-7 max-w-[680px] text-[clamp(3.15rem,4.2vw,5rem)] font-semibold leading-[1.13] tracking-[-.045em] text-[#173e30]">
               จากสวนปาล์ม
               <br />
               <span className="text-[#b47c35]">สู่ฟาร์มชันโรง</span>
@@ -203,19 +229,38 @@ function Home() {
           </div>
           <div className="relative min-h-[440px] overflow-hidden bg-[#234739] lg:min-h-full">
             <video
+              ref={videoRef}
               className="absolute inset-0 h-full w-full object-cover"
-              autoPlay
+              autoPlay={!reduceMotion}
               muted
               loop
               playsInline
+              preload="metadata"
               aria-label="วิดีโอแนะนำฟาร์ม MetaFarm"
+              onPlay={() => setPlaying(true)}
+              onPause={() => setPlaying(false)}
             >
               <source src="/videos/metafarm_video.mp4" type="video/mp4" />
               เบราว์เซอร์ของคุณไม่รองรับวิดีโอ
             </video>
-            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/65 to-transparent px-7 pb-8 pt-20 text-white md:px-10">
-              <p className="public-eyebrow text-[#f4d997]">Field notes / 01</p>
-              <p className="mt-2 text-xl font-medium">สำรวจเรื่องราวของฟาร์ม</p>
+            <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 bg-gradient-to-t from-black/65 to-transparent px-7 pb-8 pt-20 text-white md:px-10">
+              <div>
+                <p className="public-eyebrow text-[#f4d997]">
+                  บันทึกจากฟาร์ม / 01
+                </p>
+                <p className="mt-2 text-xl font-medium">
+                  สำรวจเรื่องราวของฟาร์ม
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={toggleVideo}
+                className="public-video-control"
+                aria-label={playing ? "หยุดวิดีโอชั่วคราว" : "เล่นวิดีโอ"}
+                aria-pressed={playing}
+              >
+                <span aria-hidden="true">{playing ? "Ⅱ" : "▶"}</span>
+              </button>
             </div>
           </div>
         </div>
@@ -223,7 +268,7 @@ function Home() {
 
       <section className="public-section grid gap-12 py-20 md:py-28 lg:grid-cols-[.7fr_1.3fr]">
         <div>
-          <p className="public-eyebrow text-[#ad742d]">01 / เรื่องราวของเรา</p>
+          <p className="public-eyebrow text-[#855517]">01 / เรื่องราวของเรา</p>
           <div className="mt-6 h-px w-16 bg-[#bf8947]" />
         </div>
         <Intro
@@ -247,12 +292,10 @@ function Home() {
         <div className="public-section">
           <div className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
             <Intro
-              eyebrow="Explore MetaFarm"
+              eyebrow="สำรวจ MetaFarm"
               title="เรื่องราวที่อยากชวนรู้จัก"
               secondary
-            >
-              {null}
-            </Intro>
+            />
             <p className="max-w-sm leading-7 text-[#607367]">
               จากสิ่งมีชีวิตตัวเล็กในสวน ไปจนถึงผลผลิตและการดูแลพื้นที่ของฟาร์ม
             </p>
@@ -271,7 +314,7 @@ function Home() {
                 />
               </div>
               <div className="p-7">
-                <p className="public-eyebrow text-[#dfbd77]">01 / Nature</p>
+                <p className="public-eyebrow text-[#dfbd77]">01 / ธรรมชาติ</p>
                 <h3 className="mt-5 text-2xl font-semibold">ชันโรงขนเงิน</h3>
                 <p className="mt-3 leading-7 text-[#d9e6de]">
                   รู้จักลักษณะและบทบาทของชันโรงในฟาร์ม
@@ -291,7 +334,7 @@ function Home() {
                 </span>
               </div>
               <div className="p-7">
-                <p className="public-eyebrow text-[#865c28]">02 / Harvest</p>
+                <p className="public-eyebrow text-[#765020]">02 / ผลผลิต</p>
                 <h3 className="mt-5 text-2xl font-semibold">น้ำผึ้งชันโรง</h3>
                 <p className="mt-3 leading-7 text-[#5e593f]">
                   เรื่องราวและลักษณะของผลผลิตจากรัง
@@ -319,7 +362,7 @@ function Home() {
                 </span>
               </div>
               <div className="p-7">
-                <p className="public-eyebrow text-[#ad742d]">03 / Visit</p>
+                <p className="public-eyebrow text-[#855517]">03 / ติดต่อ</p>
                 <h3 className="mt-5 text-2xl font-semibold">ติดต่อฟาร์ม</h3>
                 <p className="mt-3 leading-7 text-[#607367]">
                   ดูพื้นที่ตั้งและช่องทางติดต่อที่กำลังจัดเตรียม
@@ -353,7 +396,7 @@ function Bee() {
   const change = (step: number) =>
     setIndex((current) => (current + step + gallery.length) % gallery.length);
   return (
-    <main>
+    <main id="main-content" tabIndex={-1}>
       <section className="bg-[#173e30] text-white">
         <div className="mx-auto grid max-w-[1440px] lg:grid-cols-2">
           <div className="flex flex-col justify-center px-5 py-16 md:px-10 md:py-24">
@@ -380,7 +423,7 @@ function Bee() {
                 type="button"
                 onClick={() => change(-1)}
                 aria-label="ภาพก่อนหน้า"
-                className="grid size-9 place-items-center rounded-full hover:bg-[#e9eee7]"
+                className="grid size-11 place-items-center rounded-full hover:bg-[#e9eee7]"
               >
                 ←
               </button>
@@ -391,7 +434,7 @@ function Bee() {
                 type="button"
                 onClick={() => change(1)}
                 aria-label="ภาพถัดไป"
-                className="grid size-9 place-items-center rounded-full hover:bg-[#e9eee7]"
+                className="grid size-11 place-items-center rounded-full hover:bg-[#e9eee7]"
               >
                 →
               </button>
@@ -404,9 +447,7 @@ function Bee() {
           eyebrow="ลักษณะและการเลี้ยง"
           title="รู้จักเพื่อนตัวเล็กของฟาร์ม"
           secondary
-        >
-          {null}
-        </Intro>
+        />
         <div className="mt-10 grid gap-5 md:grid-cols-3">
           <Card title="เลี้ยงง่าย">เหมาะกับฟาร์มในไทย</Card>
           <Card title="การกระจายตัว">พบได้ทั่วประเทศ</Card>
@@ -416,7 +457,7 @@ function Bee() {
       <section className="bg-[#e9eee7] py-20 md:py-28">
         <div className="public-section grid gap-12 lg:grid-cols-[.8fr_1.2fr]">
           <div>
-            <p className="public-eyebrow text-[#ad742d]">Field guide / 01</p>
+            <p className="public-eyebrow text-[#855517]">ข้อมูลชันโรง / 01</p>
             <h2 className="mt-5 text-4xl font-semibold leading-tight text-[#173e30] md:text-5xl">
               ลักษณะของชันโรง
               <br />
@@ -441,7 +482,7 @@ function Bee() {
                   key={detail}
                   className="flex gap-4 py-5 leading-7 text-[#395449]"
                 >
-                  <span className="font-bold text-[#ad742d]">
+                  <span className="font-bold text-[#855517]">
                     {String(i + 1).padStart(2, "0")}
                   </span>
                   {detail}
@@ -481,11 +522,11 @@ function Bee() {
 
 function Honey() {
   return (
-    <main>
+    <main id="main-content" tabIndex={-1}>
       <section className="overflow-hidden bg-[#e6d6af]">
         <div className="mx-auto grid max-w-[1440px] lg:min-h-[600px] lg:grid-cols-2">
           <div className="flex flex-col justify-center px-5 py-16 md:px-10 md:py-24">
-            <p className="public-eyebrow text-[#865c28]">02 / ผลผลิตจากรัง</p>
+            <p className="public-eyebrow text-[#765020]">02 / ผลผลิตจากรัง</p>
             <h1 className="mt-7 text-[clamp(3.5rem,7vw,7rem)] font-semibold leading-[1.05] tracking-[-.05em] text-[#173e30]">
               น้ำผึ้ง
               <br />
@@ -518,9 +559,7 @@ function Honey() {
           eyebrow="เรื่องราวของผลผลิต"
           title="คุณค่าจากรังชันโรง"
           secondary
-        >
-          {null}
-        </Intro>
+        />
         <div className="mt-10 grid gap-5 md:grid-cols-3">
           <Card title="จุดเด่นสำคัญ">
             มีน้ำตาล Trehalulose ที่พบได้ยาก และร่างกายค่อย ๆ ดูดซึม
@@ -539,10 +578,14 @@ function Honey() {
 
 function Placeholder({ title }: { title: string }) {
   return (
-    <main className="public-section py-20 md:py-28">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="public-section py-20 md:py-28"
+    >
       <div className="relative min-h-[420px] overflow-hidden bg-[#e9eee7] p-8 md:p-14">
         <div className="relative z-10 flex min-h-[320px] flex-col justify-center">
-          <Intro eyebrow="Coming soon / MetaFarm" title={title}>
+          <Intro eyebrow="กำลังจัดเตรียมเนื้อหา / MetaFarm" title={title}>
             <p>หน้านี้ถูกเตรียมไว้สำหรับพัฒนาเนื้อหาในลำดับถัดไป</p>
           </Intro>
           <a href="/" className="public-text-link mt-8 w-fit">
@@ -562,7 +605,7 @@ function Placeholder({ title }: { title: string }) {
 
 function Contact() {
   return (
-    <main>
+    <main id="main-content" tabIndex={-1}>
       <section className="bg-[#173e30] text-white">
         <div className="public-section py-20 md:py-28">
           <p className="public-eyebrow text-[#e7c77c]">03 / ติดต่อ MetaFarm</p>
@@ -576,9 +619,7 @@ function Contact() {
       </section>
       <section className="public-section grid gap-12 py-20 md:py-28 lg:grid-cols-[.8fr_1.2fr]">
         <div>
-          <Intro eyebrow="Find us" title="พบกันที่ระยอง" secondary>
-            {null}
-          </Intro>
+          <Intro eyebrow="ที่ตั้งฟาร์ม" title="พบกันที่ระยอง" secondary />
           <p className="mt-6 max-w-sm leading-8 text-[#607367]">
             สวนปาล์มและฟาร์มชันโรงในพื้นที่ ต.หนองไร่ อ.ปลวกแดง จ.ระยอง
           </p>
@@ -606,6 +647,11 @@ function Contact() {
 
 export function PublicPage() {
   const path = resolvePublicPath(window.location.pathname);
+  useEffect(() => {
+    const label = publicRoutes.find((route) => route.path === path)?.label;
+    document.title =
+      path === "/" ? "MetaFarm | ฟาร์มชันโรง" : `${label} | MetaFarm`;
+  }, [path]);
   const pages: Record<string, ReactNode> = {
     "/": <Home />,
     "/stingless-bee": <Bee />,
@@ -617,6 +663,9 @@ export function PublicPage() {
   };
   return (
     <div className="min-h-screen bg-[#f8f8f2]">
+      <a href="#main-content" className="skip-link">
+        ข้ามไปเนื้อหา
+      </a>
       <Header path={path} />
       {pages[path]}
       <Footer />

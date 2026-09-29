@@ -9,7 +9,13 @@ import { api, type Dashboard, type Hive, type Inspection } from "../lib/api";
 import { farmDate } from "../lib/date";
 
 type Section = "hives" | "harvests" | "inspections" | "team";
-const statuses = ["Strong", "Normal", "Weak", "Empty"];
+const statusLabels: Record<string, string> = {
+  Strong: "แข็งแรง",
+  Normal: "ปกติ",
+  Weak: "อ่อนแอ",
+  Empty: "รังว่าง",
+};
+const statuses = Object.keys(statusLabels);
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -32,7 +38,9 @@ function StatusSelect({ value = "Normal" }: { value?: string }) {
   return (
     <select name="status" defaultValue={value} className="input">
       {statuses.map((status) => (
-        <option key={status}>{status}</option>
+        <option key={status} value={status}>
+          {statusLabels[status]}
+        </option>
       ))}
     </select>
   );
@@ -51,9 +59,15 @@ function validatedImage(value: FormDataEntryValue | null): File | null {
 
 export function AdminPage() {
   const today = farmDate();
+  useEffect(() => {
+    document.title = "ระบบจัดการฟาร์ม | MetaFarm";
+  }, []);
   const [data, setData] = useState<Dashboard | null>(null);
   const [section, setSection] = useState<Section>("hives");
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState<{
+    message: string;
+    kind: "success" | "error";
+  } | null>(null);
   const [loadError, setLoadError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -73,15 +87,18 @@ export function AdminPage() {
     event.preventDefault();
     const form = event.currentTarget;
     setBusy(true);
-    setNotice("");
+    setNotice(null);
     try {
       await action();
       await refresh();
-      setNotice("บันทึกข้อมูลแล้ว");
+      setNotice({ message: "บันทึกข้อมูลแล้ว", kind: "success" });
       if (resetAfter) form.reset();
     } catch (cause) {
       await refresh().catch(() => undefined);
-      setNotice(cause instanceof Error ? cause.message : "บันทึกไม่สำเร็จ");
+      setNotice({
+        message: cause instanceof Error ? cause.message : "บันทึกไม่สำเร็จ",
+        kind: "error",
+      });
     } finally {
       setBusy(false);
     }
@@ -190,11 +207,13 @@ export function AdminPage() {
         body: JSON.stringify({ active }),
       });
       await refresh();
-      setNotice("เปลี่ยนสิทธิ์แล้ว");
+      setNotice({ message: "เปลี่ยนสิทธิ์แล้ว", kind: "success" });
     } catch (cause) {
-      setNotice(
-        cause instanceof Error ? cause.message : "เปลี่ยนสิทธิ์ไม่สำเร็จ",
-      );
+      setNotice({
+        message:
+          cause instanceof Error ? cause.message : "เปลี่ยนสิทธิ์ไม่สำเร็จ",
+        kind: "error",
+      });
     } finally {
       setBusy(false);
     }
@@ -202,6 +221,9 @@ export function AdminPage() {
 
   return (
     <div className="admin-shell min-h-screen bg-[#f8f8f2] text-[#173e30]">
+      <a href="#main-content" className="skip-link">
+        ข้ามไปเนื้อหา
+      </a>
       <header className="border-b border-[#dcded3] bg-[#f8f8f2]">
         <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-3 px-5 py-4 md:px-10">
           <div>
@@ -212,22 +234,31 @@ export function AdminPage() {
                 className="h-11 w-auto"
               />
             </a>
-            <p className="mt-1 text-xs font-semibold tracking-[.15em] text-[#ad742d] uppercase">
+            <p className="mt-1 text-xs font-semibold tracking-[.15em] text-[#855517] uppercase">
               Farm management
             </p>
           </div>
           <div className="text-right text-sm">
             <p className="font-semibold">
-              {data?.staff.email ?? "กำลังตรวจสิทธิ์..."}
+              {data?.staff.email ??
+                (loadError ? "โหลดข้อมูลไม่ได้" : "กำลังตรวจสิทธิ์...")}
             </p>
             <p className="text-[#607367]">
-              {data?.staff.role === "owner" ? "เจ้าของฟาร์ม" : "ทีมงาน"}
+              {data
+                ? data.staff.role === "owner"
+                  ? "เจ้าของฟาร์ม"
+                  : "ทีมงาน"
+                : ""}
             </p>
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-[1440px] px-5 py-10 md:px-10 md:py-14">
-        <p className="public-eyebrow text-[#ad742d]">MetaFarm / Dashboard</p>
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="mx-auto max-w-[1440px] px-5 py-10 md:px-10 md:py-14"
+      >
+        <p className="public-eyebrow text-[#855517]">MetaFarm / Dashboard</p>
         <h1 className="mt-3 text-4xl font-semibold tracking-tight md:text-5xl">
           ภาพรวมฟาร์ม
         </h1>
@@ -236,10 +267,10 @@ export function AdminPage() {
         </p>
         {notice && (
           <p
-            role="status"
-            className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900"
+            role={notice.kind === "error" ? "alert" : "status"}
+            className={`mt-6 border-l-4 p-4 ${notice.kind === "error" ? "border-red-700 bg-red-50 text-red-900" : "border-[#357451] bg-[#e9f3e8] text-[#173e30]"}`}
           >
-            {notice}
+            {notice.message}
           </p>
         )}
         {!data ? (
@@ -276,13 +307,13 @@ export function AdminPage() {
                 </p>
               </Card>
               <Card>
-                <p className="text-sm text-[#607367]">ผลผลิตล่าสุด</p>
+                <p className="text-sm text-[#607367]">บันทึกผลผลิต</p>
                 <p className="mt-4 text-5xl font-semibold">
                   {data.harvests.length}
                 </p>
               </Card>
               <Card>
-                <p className="text-sm text-[#607367]">การตรวจล่าสุด</p>
+                <p className="text-sm text-[#607367]">บันทึกการตรวจ</p>
                 <p className="mt-4 text-5xl font-semibold">
                   {data.inspections.length}
                 </p>
@@ -306,8 +337,8 @@ export function AdminPage() {
                   key={item.id}
                   type="button"
                   onClick={() => setSection(item.id)}
-                  aria-current={section === item.id ? "page" : undefined}
-                  className={`rounded-full px-5 py-2.5 text-sm font-semibold transition-colors ${section === item.id ? "bg-[#173e30] text-white" : "bg-[#e9eee7] text-[#315242] hover:bg-[#dce8da]"}`}
+                  aria-pressed={section === item.id}
+                  className={`min-h-11 rounded-full px-5 py-2.5 text-sm font-semibold transition-colors ${section === item.id ? "bg-[#173e30] text-white" : "bg-[#e9eee7] text-[#315242] hover:bg-[#dce8da]"}`}
                 >
                   {item.label}
                 </button>
@@ -359,7 +390,7 @@ export function AdminPage() {
                       <summary className="cursor-pointer font-bold">
                         {hive.code} · {hive.name}{" "}
                         <span className="ml-2 text-sm font-normal text-slate-500">
-                          {hive.status}
+                          {statusLabels[hive.status] ?? hive.status}
                         </span>
                       </summary>
                       <form
@@ -403,7 +434,15 @@ export function AdminPage() {
                       </form>
                     </details>
                   ))}
-                  {!data.hives.length && <Card>ยังไม่มีรัง</Card>}
+                  {!data.hives.length && (
+                    <Card>
+                      <p className="font-semibold">ยังไม่มีรังในระบบ</p>
+                      <p className="mt-2 text-sm leading-7 text-[#607367]">
+                        เริ่มจากกรอกข้อมูลรังในแบบฟอร์มด้านซ้าย
+                        แล้วจึงบันทึกผลผลิตและการตรวจได้
+                      </p>
+                    </Card>
+                  )}
                 </div>
               </div>
             )}
@@ -463,6 +502,11 @@ export function AdminPage() {
                   >
                     บันทึกผลผลิต
                   </button>
+                  {!data.hives.length && (
+                    <p className="text-sm text-[#855517]">
+                      ต้องเพิ่มรังชันโรงก่อนบันทึกผลผลิต
+                    </p>
+                  )}
                 </form>
                 <Card>
                   <h2 className="mb-4 text-xl font-bold">รายการล่าสุด</h2>
@@ -548,6 +592,11 @@ export function AdminPage() {
                   >
                     บันทึกการตรวจ
                   </button>
+                  {!data.hives.length && (
+                    <p className="text-sm text-[#855517]">
+                      ต้องเพิ่มรังชันโรงก่อนบันทึกการตรวจ
+                    </p>
+                  )}
                 </form>
                 <div className="space-y-3">
                   {data.inspections.map((record) => (
@@ -562,7 +611,7 @@ export function AdminPage() {
                         </span>
                       </p>
                       <p className="mt-2 text-sm text-emerald-800">
-                        สถานะ: {record.status}
+                        สถานะ: {statusLabels[record.status] ?? record.status}
                       </p>
                       {record.notes && (
                         <p className="mt-2 whitespace-pre-wrap text-slate-600">
