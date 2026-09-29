@@ -2,6 +2,7 @@ import { Card } from "../../components/ui/Card";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { th } from "../../i18n/th";
 import type { Harvest } from "../../lib/api";
+import { formatFarmDate, formatFarmNumber } from "../../lib/date";
 
 export function HarvestList({
   harvests,
@@ -24,7 +25,7 @@ export function HarvestList({
         {harvests.map((record) => (
           <Card key={record.id}>
             <p className="text-sm font-semibold text-stone-600">
-              {record.harvestedAt}
+              {formatFarmDate(record.harvestedAt)}
             </p>
             <h3 className="mt-1 text-lg font-bold">
               {hiveName(record.hiveId)}
@@ -35,7 +36,7 @@ export function HarvestList({
                   {th.admin.honey}
                 </span>
                 <strong>
-                  {record.honeyMl} {th.common.milliliters}
+                  {formatFarmNumber(record.honeyMl)} {th.common.milliliters}
                 </strong>
               </p>
               <p>
@@ -43,7 +44,7 @@ export function HarvestList({
                   {th.admin.propolis}
                 </span>
                 <strong>
-                  {record.propolisG} {th.common.grams}
+                  {formatFarmNumber(record.propolisG)} {th.common.grams}
                 </strong>
               </p>
             </div>
@@ -65,13 +66,13 @@ export function HarvestList({
           <tbody>
             {harvests.map((record) => (
               <tr key={record.id} className="border-b border-stone-100">
-                <td className="py-3">{record.harvestedAt}</td>
+                <td className="py-3">{formatFarmDate(record.harvestedAt)}</td>
                 <td>{hiveName(record.hiveId)}</td>
                 <td>
-                  {record.honeyMl} {th.common.milliliters}
+                  {formatFarmNumber(record.honeyMl)} {th.common.milliliters}
                 </td>
                 <td>
-                  {record.propolisG} {th.common.grams}
+                  {formatFarmNumber(record.propolisG)} {th.common.grams}
                 </td>
               </tr>
             ))}

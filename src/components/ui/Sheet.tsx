@@ -8,6 +8,7 @@ type Props = {
   children: ReactNode;
   side?: "bottom" | "right";
   id?: string;
+  dialogRole?: "dialog" | "alertdialog";
 };
 
 export function Sheet({
@@ -17,6 +18,7 @@ export function Sheet({
   children,
   side = "bottom",
   id,
+  dialogRole = "dialog",
 }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -65,7 +67,7 @@ export function Sheet({
       <div
         ref={dialogRef}
         id={id}
-        role="dialog"
+        role={dialogRole}
         aria-modal="true"
         aria-label={title}
         className={`absolute flex flex-col overflow-hidden bg-white shadow-float ${side === "right" ? "inset-y-0 right-0 h-full w-full max-w-md" : "inset-x-0 bottom-0 max-h-[94dvh] rounded-t-hero sm:mx-auto sm:max-w-xl"}`}

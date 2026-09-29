@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { publicRoutes, resolvePublicPath } from "./publicRoutes";
+import {
+  publicNavigationRoutes,
+  publicRoutes,
+  resolvePublicPath,
+} from "./publicRoutes";
 
 describe("public pages migrated from the original app", () => {
   it("keeps every original public route", () => {
@@ -18,5 +22,14 @@ describe("public pages migrated from the original app", () => {
     expect(resolvePublicPath("/stingless-bee/")).toBe("/stingless-bee");
     expect(resolvePublicPath("/contact")).toBe("/contact");
     expect(resolvePublicPath("/unknown")).toBe("/");
+  });
+
+  it("shows only ready pages in navigation", () => {
+    expect(publicNavigationRoutes.map((route) => route.path)).toEqual([
+      "/",
+      "/stingless-bee",
+      "/stingless-bee-honey",
+      "/contact",
+    ]);
   });
 });

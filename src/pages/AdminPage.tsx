@@ -5,10 +5,10 @@ import {
 } from "../components/layout/AdminLayout";
 import { FeaturePanel } from "../components/layout/FeaturePanel";
 import { Button } from "../components/ui/Button";
-import { Card } from "../components/ui/Card";
 import { EmptyState } from "../components/ui/EmptyState";
 import { Skeleton } from "../components/ui/Skeleton";
 import { Toast, type ToastMessage } from "../components/ui/Toast";
+import { DashboardSummary } from "../features/dashboard/DashboardSummary";
 import { HiveForm } from "../features/hives/HiveForm";
 import { HiveList } from "../features/hives/HiveList";
 import { HarvestForm } from "../features/harvests/HarvestForm";
@@ -200,12 +200,14 @@ export function AdminPage() {
       });
       await refresh();
       setNotice({ message: th.admin.roleChanged, kind: "success" });
+      return true;
     } catch (cause) {
       setNotice({
         message:
           cause instanceof Error ? cause.message : th.admin.roleChangeFailed,
         kind: "error",
       });
+      return false;
     } finally {
       setBusy(false);
     }
@@ -241,89 +243,87 @@ export function AdminPage() {
           <Skeleton />
         )
       ) : (
-        <>
-          <div className="mb-6 grid grid-cols-3 gap-2 sm:gap-4">
-            {[
-              [th.admin.hiveCount, data.hives.length],
-              [th.admin.harvestCount, data.harvests.length],
-              [th.admin.inspectionCount, data.inspections.length],
-            ].map(([label, value]) => (
-              <Card key={label} className="p-3 sm:p-5">
-                <p className="text-xs text-stone-600 sm:text-sm">{label}</p>
-                <p className="mt-2 text-2xl font-black text-leaf-800 sm:text-4xl">
-                  {value}
-                </p>
-              </Card>
-            ))}
+        <div className="flex flex-col gap-6">
+          <div
+            className={`${section === "hives" ? "order-2" : "hidden"} lg:order-1 lg:block`}
+          >
+            <DashboardSummary data={data} today={today} />
           </div>
-          {section === "hives" && (
-            <FeaturePanel
-              title={th.admin.addHive}
-              actionLabel={th.admin.addHive}
-              savedVersion={savedVersion}
-              form={<HiveForm busy={busy} onSubmit={createHive} />}
-              list={
-                <HiveList
-                  hives={data.hives}
-                  busy={busy}
-                  onUpdate={updateHive}
-                />
-              }
-            />
-          )}
-          {section === "harvests" && (
-            <FeaturePanel
-              title={th.admin.addHarvest}
-              actionLabel={th.admin.addHarvest}
-              savedVersion={savedVersion}
-              form={
-                <HarvestForm
-                  hives={data.hives}
-                  today={today}
-                  busy={busy}
-                  onSubmit={createHarvest}
-                />
-              }
-              list={
-                <HarvestList harvests={data.harvests} hiveName={hiveName} />
-              }
-            />
-          )}
-          {section === "inspections" && (
-            <FeaturePanel
-              title={th.admin.addInspection}
-              actionLabel={th.admin.addInspection}
-              savedVersion={savedVersion}
-              form={
-                <InspectionForm
-                  hives={data.hives}
-                  today={today}
-                  busy={busy}
-                  onSubmit={createInspection}
-                />
-              }
-              list={
-                <InspectionList
-                  inspections={data.inspections}
-                  hiveName={hiveName}
-                  busy={busy}
-                  onUpload={uploadInspectionPhoto}
-                />
-              }
-            />
-          )}
-          {section === "team" && data.staff.role === "owner" && (
-            <FeaturePanel
-              title={th.admin.addTeam}
-              actionLabel={th.admin.addTeam}
-              savedVersion={savedVersion}
-              form={<TeamForm busy={busy} onSubmit={createTeam} />}
-              list={
-                <TeamList team={data.team} busy={busy} onToggle={toggleTeam} />
-              }
-            />
-          )}
-        </>
+          <div className="order-1 lg:order-2">
+            {section === "hives" && (
+              <FeaturePanel
+                title={th.admin.addHive}
+                actionLabel={th.admin.addHive}
+                savedVersion={savedVersion}
+                form={<HiveForm busy={busy} onSubmit={createHive} />}
+                list={
+                  <HiveList
+                    hives={data.hives}
+                    busy={busy}
+                    onUpdate={updateHive}
+                  />
+                }
+              />
+            )}
+            {section === "harvests" && (
+              <FeaturePanel
+                title={th.admin.addHarvest}
+                actionLabel={th.admin.addHarvest}
+                savedVersion={savedVersion}
+                form={
+                  <HarvestForm
+                    hives={data.hives}
+                    today={today}
+                    busy={busy}
+                    onSubmit={createHarvest}
+                  />
+                }
+                list={
+                  <HarvestList harvests={data.harvests} hiveName={hiveName} />
+                }
+              />
+            )}
+            {section === "inspections" && (
+              <FeaturePanel
+                title={th.admin.addInspection}
+                actionLabel={th.admin.addInspection}
+                savedVersion={savedVersion}
+                form={
+                  <InspectionForm
+                    hives={data.hives}
+                    today={today}
+                    busy={busy}
+                    onSubmit={createInspection}
+                  />
+                }
+                list={
+                  <InspectionList
+                    inspections={data.inspections}
+                    hiveName={hiveName}
+                    busy={busy}
+                    onUpload={uploadInspectionPhoto}
+                    savedVersion={savedVersion}
+                  />
+                }
+              />
+            )}
+            {section === "team" && data.staff.role === "owner" && (
+              <FeaturePanel
+                title={th.admin.addTeam}
+                actionLabel={th.admin.addTeam}
+                savedVersion={savedVersion}
+                form={<TeamForm busy={busy} onSubmit={createTeam} />}
+                list={
+                  <TeamList
+                    team={data.team}
+                    busy={busy}
+                    onToggle={toggleTeam}
+                  />
+                }
+              />
+            )}
+          </div>
+        </div>
       )}
     </AdminLayout>
   );

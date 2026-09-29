@@ -42,7 +42,7 @@ export function Home() {
           </div>
           <div className="overflow-hidden rounded-hero bg-stone-900 shadow-card">
             <video
-              poster="/pictures/Picture2.png"
+              poster="/videos/metafarm-poster.svg"
               controls
               autoPlay={autoPlay}
               muted
@@ -75,14 +75,16 @@ export function Home() {
       </section>
       <section className="bg-white">
         <div className="mx-auto grid max-w-7xl gap-8 px-4 py-14 sm:px-6 md:grid-cols-2 md:items-center lg:px-8">
-          <img
-            src="/pictures/Picture2.png"
-            alt={th.public.beeImageAlt}
-            width="396"
-            height="277"
-            loading="lazy"
-            className="w-full rounded-hero object-cover shadow-card"
-          />
+          <div className="grid min-h-72 place-items-center rounded-hero bg-leaf-50 p-6">
+            <img
+              src="/pictures/Picture2.png"
+              alt={th.public.beeImageAlt}
+              width="396"
+              height="277"
+              loading="lazy"
+              className="w-full max-w-[198px] rounded-card object-cover shadow-card"
+            />
+          </div>
           <div>
             <Badge tone="success">{th.public.beeWhat}</Badge>
             <h2 className="mt-4 text-page font-black">{th.public.beeTitle}</h2>
@@ -116,10 +118,10 @@ export function Home() {
             {th.public.trainingTitle}
           </h2>
           <p className="mt-4 max-w-2xl text-stone-700">
-            {th.public.comingSoon}
+            {th.public.trainingIntro}
           </p>
-          <ButtonLink href="/training" variant="outline" className="mt-6">
-            {th.public.seeTraining} <span aria-hidden="true">→</span>
+          <ButtonLink href="/stingless-bee" variant="outline" className="mt-6">
+            {th.public.readBee} <span aria-hidden="true">→</span>
           </ButtonLink>
         </div>
       </section>

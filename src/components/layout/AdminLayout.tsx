@@ -6,27 +6,37 @@ const sections: {
   id: AdminSection;
   label: string;
   mobileLabel: string;
+  description: string;
   icon: string;
 }[] = [
   {
     id: "hives",
     label: th.admin.hives,
     mobileLabel: th.admin.hives,
+    description: th.admin.hivesDescription,
     icon: "⬡",
   },
   {
     id: "harvests",
     label: th.admin.harvests,
     mobileLabel: th.admin.harvests,
+    description: th.admin.harvestsDescription,
     icon: "◈",
   },
   {
     id: "inspections",
     label: th.admin.inspections,
     mobileLabel: th.admin.inspectionsShort,
+    description: th.admin.inspectionsDescription,
     icon: "✓",
   },
-  { id: "team", label: th.admin.team, mobileLabel: th.admin.team, icon: "♧" },
+  {
+    id: "team",
+    label: th.admin.team,
+    mobileLabel: th.admin.team,
+    description: th.admin.teamDescription,
+    icon: "♧",
+  },
 ];
 
 export function AdminLayout({
@@ -44,68 +54,98 @@ export function AdminLayout({
 }) {
   const items =
     role === "owner" ? sections : sections.filter((item) => item.id !== "team");
+  const current = sections.find((item) => item.id === section) ?? sections[0];
+  const roleLabel =
+    role === "owner" ? th.admin.owner : role === "staff" ? th.admin.staff : "";
+
   return (
-    <div className="min-h-screen bg-stone-50 pb-24 text-stone-900 lg:pb-0">
+    <div className="min-h-screen bg-stone-50 pb-24 text-stone-900 lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] lg:pb-0">
       <a href="#main-content" className="skip-link">
         {th.common.skip}
       </a>
-      <header className="border-b border-stone-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
-          <a href="/" aria-label={th.public.logoHome}>
-            <img
-              src="/logo.png"
-              alt="MetaFarm"
-              width="500"
-              height="196"
-              className="h-10 w-auto"
-            />
-          </a>
-          <div className="min-w-0 text-right">
-            <p className="truncate text-xs font-semibold text-stone-800 sm:text-sm">
-              {email ?? th.admin.checkingAccess}
-            </p>
-            <p className="text-xs text-stone-600">
-              {role === "owner"
-                ? th.admin.owner
-                : role === "staff"
-                  ? th.admin.staff
-                  : ""}
-            </p>
-          </div>
-        </div>
-      </header>
-      <main
-        id="main-content"
-        tabIndex={-1}
-        className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-10"
-      >
-        <div className="mb-6">
-          <p className="text-sm font-bold text-honey-700">
-            MetaFarm / Dashboard
-          </p>
-          <h1 className="mt-2 text-page font-black">{th.admin.title}</h1>
-          <p className="mt-2 text-sm text-stone-600">{th.admin.description}</p>
-        </div>
+      <aside className="hidden border-r border-stone-200 bg-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:p-5">
+        <a
+          href="/"
+          aria-label={th.public.logoHome}
+          className="inline-flex min-h-14 items-center"
+        >
+          <img
+            src="/logo.png"
+            alt="MetaFarm"
+            width="500"
+            height="196"
+            className="h-10 w-auto"
+          />
+        </a>
+        <p className="mt-8 px-3 text-xs font-bold uppercase tracking-wide text-stone-500">
+          {th.admin.farmManagement}
+        </p>
         {role && (
-          <nav
-            aria-label={th.admin.adminNav}
-            className="mb-6 hidden gap-2 border-b border-stone-200 pb-4 lg:flex"
-          >
+          <nav aria-label={th.admin.adminNav} className="mt-3 grid gap-1">
             {items.map((item) => (
               <button
                 key={item.id}
                 type="button"
                 aria-current={section === item.id ? "page" : undefined}
                 onClick={() => onSectionChange(item.id)}
-                className={`min-h-11 rounded-control px-5 text-sm font-bold ${section === item.id ? "bg-leaf-800 text-white" : "text-stone-700 hover:bg-stone-100"}`}
+                className={`flex min-h-12 items-center gap-3 rounded-control px-3 text-left font-bold ${section === item.id ? "bg-leaf-50 text-leaf-800" : "text-stone-700 hover:bg-stone-100"}`}
               >
+                <span aria-hidden="true" className="text-lg">
+                  {item.icon}
+                </span>
                 {item.label}
               </button>
             ))}
           </nav>
         )}
-        {children}
-      </main>
+        <div className="mt-auto border-t border-stone-200 px-3 pt-4">
+          <p className="break-all text-sm font-semibold">
+            {email ?? th.admin.checkingAccess}
+          </p>
+          <p className="text-xs text-stone-600">{roleLabel}</p>
+        </div>
+      </aside>
+
+      <div className="min-w-0">
+        <header className="border-b border-stone-200 bg-white lg:hidden">
+          <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2 sm:px-6">
+            <a href="/" aria-label={th.public.logoHome}>
+              <img
+                src="/logo.png"
+                alt="MetaFarm"
+                width="500"
+                height="196"
+                className="h-10 w-auto"
+              />
+            </a>
+            <div className="min-w-0 text-right">
+              <p className="truncate text-xs font-semibold text-stone-800">
+                {email ?? th.admin.checkingAccess}
+              </p>
+              <p className="text-xs text-stone-600">{roleLabel}</p>
+            </div>
+          </div>
+        </header>
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 lg:px-8 lg:py-8"
+        >
+          <div className="mb-4 lg:mb-6">
+            <p className="text-xs font-bold text-honey-700">
+              {th.admin.farmManagement}
+            </p>
+            <h1 className="mt-1 text-2xl font-black lg:text-page">
+              {current.label}
+            </h1>
+            <p className="mt-1 hidden text-sm text-stone-600 lg:block">
+              {current.description}
+            </p>
+          </div>
+          {children}
+        </main>
+      </div>
+
       {role && (
         <nav
           aria-label={th.admin.adminNavMobile}

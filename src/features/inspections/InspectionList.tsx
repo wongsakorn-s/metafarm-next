@@ -1,10 +1,12 @@
-import type { FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { Sheet } from "../../components/ui/Sheet";
 import { StatusBadge } from "../hives/StatusBadge";
 import { th } from "../../i18n/th";
 import type { Inspection } from "../../lib/api";
+import { formatFarmDate } from "../../lib/date";
 import { PhotoUpload } from "./PhotoUpload";
 
 export function InspectionList({
@@ -12,12 +14,21 @@ export function InspectionList({
   hiveName,
   busy,
   onUpload,
+  savedVersion,
 }: {
   inspections: Inspection[];
   hiveName: (id: string) => string;
   busy: boolean;
   onUpload: (event: FormEvent<HTMLFormElement>, id: string) => void;
+  savedVersion: number;
 }) {
+  const [photoRecordId, setPhotoRecordId] = useState<string | null>(null);
+  const previousVersion = useRef(savedVersion);
+  useEffect(() => {
+    if (previousVersion.current !== savedVersion) setPhotoRecordId(null);
+    previousVersion.current = savedVersion;
+  }, [savedVersion]);
+  const photoRecord = inspections.find((record) => record.id === photoRecordId);
   if (!inspections.length)
     return (
       <EmptyState
@@ -34,7 +45,7 @@ export function InspectionList({
             <div>
               <h3 className="font-bold">{hiveName(record.hiveId)}</h3>
               <p className="mt-1 text-sm text-stone-600">
-                {record.inspectedAt}
+                {formatFarmDate(record.inspectedAt)}
               </p>
             </div>
             <StatusBadge status={record.status} />
@@ -54,22 +65,35 @@ export function InspectionList({
               {th.common.viewPhoto}
             </a>
           )}
-          <form
-            onSubmit={(event) => onUpload(event, record.id)}
-            className="mt-4 border-t border-stone-100 pt-4"
-          >
-            <PhotoUpload required />
+          <div className="mt-4 border-t border-stone-100 pt-4">
             <Button
-              type="submit"
-              disabled={busy}
-              className="mt-3"
               variant="outline"
+              onClick={() => setPhotoRecordId(record.id)}
             >
               {record.imageKey ? th.admin.photoReplace : th.admin.photoAdd}
             </Button>
-          </form>
+          </div>
         </Card>
       ))}
+      <Sheet
+        open={Boolean(photoRecord)}
+        onClose={() => setPhotoRecordId(null)}
+        title={
+          photoRecord?.imageKey ? th.admin.photoReplace : th.admin.photoAdd
+        }
+      >
+        {photoRecord && (
+          <form onSubmit={(event) => onUpload(event, photoRecord.id)}>
+            <p className="mb-4 font-semibold text-stone-800">
+              {hiveName(photoRecord.hiveId)}
+            </p>
+            <PhotoUpload required />
+            <Button type="submit" disabled={busy} full className="mt-5">
+              {busy ? th.common.saving : th.common.save}
+            </Button>
+          </form>
+        )}
+      </Sheet>
     </div>
   );
 }

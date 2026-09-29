@@ -53,13 +53,15 @@ export function StinglessBee() {
             ))}
           </div>
         </div>
-        <img
-          src={photos[0].src}
-          alt={photos[0].alt}
-          width={photos[0].width}
-          height={photos[0].height}
-          className="w-full rounded-hero object-cover shadow-card"
-        />
+        <div className="grid min-h-72 place-items-center rounded-hero bg-leaf-50 p-6">
+          <img
+            src={photos[0].src}
+            alt={photos[0].alt}
+            width={photos[0].width}
+            height={photos[0].height}
+            className="w-full max-w-[198px] rounded-card object-cover shadow-card"
+          />
+        </div>
       </section>
       <section className="mt-14 grid gap-8 lg:grid-cols-2">
         <Card>
@@ -71,7 +73,7 @@ export function StinglessBee() {
               width={photos[active].width}
               height={photos[active].height}
               loading="lazy"
-              className="aspect-[4/3] w-full object-cover"
+              className="mx-auto aspect-[4/3] w-full max-w-[175px] object-cover"
             />
           </div>
           <div className="mt-4 flex items-center justify-between">

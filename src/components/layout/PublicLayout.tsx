@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Button, ButtonLink } from "../ui/Button";
 import { Sheet } from "../ui/Sheet";
 import { th } from "../../i18n/th";
-import { publicRoutes } from "../../pages/publicRoutes";
+import { publicNavigationRoutes } from "../../pages/publicRoutes";
 
 export function PublicLayout({
   path,
@@ -36,7 +36,7 @@ export function PublicLayout({
             aria-label={th.public.mainNav}
             className="hidden items-center gap-1 lg:flex"
           >
-            {publicRoutes.map((item) => (
+            {publicNavigationRoutes.map((item) => (
               <a
                 key={item.path}
                 href={item.path}
@@ -72,7 +72,7 @@ export function PublicLayout({
         title={th.public.menu}
       >
         <nav aria-label={th.public.mobileNav} className="grid gap-1">
-          {publicRoutes.map((item) => (
+          {publicNavigationRoutes.map((item) => (
             <a
               key={item.path}
               href={item.path}
@@ -108,10 +108,6 @@ export function PublicLayout({
             />
             <p className="mt-4 font-bold text-leaf-800">{th.public.footer}</p>
             <p className="mt-2 text-sm text-stone-600">{th.public.location}</p>
-            <p className="mt-2 text-sm text-stone-600">
-              {th.public.phone}: {th.public.pending} · {th.public.email}:{" "}
-              {th.public.pending}
-            </p>
           </div>
           <div>
             <h2 className="text-base font-bold">{th.public.explore}</h2>
@@ -119,7 +115,7 @@ export function PublicLayout({
               aria-label={th.public.footerNav}
               className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1"
             >
-              {publicRoutes.map((item) => (
+              {publicNavigationRoutes.map((item) => (
                 <a
                   key={item.path}
                   href={item.path}
@@ -129,9 +125,6 @@ export function PublicLayout({
                 </a>
               ))}
             </nav>
-            <p className="mt-3 text-sm text-stone-600">
-              {th.public.facebook}: {th.public.pending}
-            </p>
             <a
               href="/admin"
               className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-leaf-800"

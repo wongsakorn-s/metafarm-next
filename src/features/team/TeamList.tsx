@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { Badge } from "../../components/ui/Badge";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { th } from "../../i18n/th";
 import type { TeamMember } from "../../lib/api";
 
@@ -12,8 +14,9 @@ export function TeamList({
 }: {
   team: TeamMember[];
   busy: boolean;
-  onToggle: (email: string, active: boolean) => void;
+  onToggle: (email: string, active: boolean) => Promise<boolean>;
 }) {
+  const [pending, setPending] = useState<TeamMember | null>(null);
   if (!team.length) return <EmptyState title={th.admin.noTeam} />;
   return (
     <div className="space-y-3">
@@ -38,12 +41,29 @@ export function TeamList({
           <Button
             variant="outline"
             disabled={busy}
-            onClick={() => onToggle(member.email, !member.active)}
+            onClick={() => setPending(member)}
           >
             {member.active ? th.admin.deactivate : th.admin.activate}
           </Button>
         </Card>
       ))}
+      <ConfirmDialog
+        open={pending !== null}
+        title={
+          pending?.active
+            ? th.admin.confirmDeactivate
+            : th.admin.confirmActivate
+        }
+        description={`${pending?.email ?? ""} — ${pending?.active ? th.admin.deactivateWarning : th.admin.activateWarning}`}
+        confirmLabel={pending?.active ? th.admin.deactivate : th.admin.activate}
+        destructive={pending?.active}
+        busy={busy}
+        onClose={() => setPending(null)}
+        onConfirm={async () => {
+          if (!pending) return;
+          if (await onToggle(pending.email, !pending.active)) setPending(null);
+        }}
+      />
     </div>
   );
 }

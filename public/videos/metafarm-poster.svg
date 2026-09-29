@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-labelledby="title description">
+  <title id="title">MetaFarm</title>
+  <desc id="description">ภาพปกวิดีโอแนะนำฟาร์มชันโรง MetaFarm</desc>
+  <defs>
+    <linearGradient id="background" x2="1" y2="1">
+      <stop stop-color="#173e30"/>
+      <stop offset="1" stop-color="#315242"/>
+    </linearGradient>
+    <pattern id="honeycomb" width="128" height="112" patternUnits="userSpaceOnUse">
+      <path d="M32 4 64 22v37L32 78 0 59V22ZM96 60l32 19v37l-32 18-32-18V79Z" fill="none" stroke="#ffffff" stroke-opacity=".12" stroke-width="2"/>
+    </pattern>
+  </defs>
+  <rect width="1280" height="720" fill="url(#background)"/>
+  <rect width="1280" height="720" fill="url(#honeycomb)"/>
+  <circle cx="640" cy="310" r="72" fill="#fff0cd"/>
+  <path d="m621 269 65 41-65 41z" fill="#173e30"/>
+  <text x="640" y="480" fill="#ffffff" font-family="sans-serif" font-size="68" font-weight="700" text-anchor="middle">MetaFarm</text>
+  <text x="640" y="542" fill="#fff0cd" font-family="sans-serif" font-size="32" text-anchor="middle">Stingless Bee Farm</text>
+</svg>
