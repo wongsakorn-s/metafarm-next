@@ -13,6 +13,8 @@ export type Harvest = {
   harvestedAt: string;
   honeyMl: number;
   propolisG: number;
+  createdByEmail: string | null;
+  createdAt: string;
 };
 export type Inspection = {
   id: string;

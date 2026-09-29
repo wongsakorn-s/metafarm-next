@@ -58,18 +58,24 @@ try {
     inspectedAt: today,
   });
   assert.ok(secondInspection.id);
-  await request<CreatedRecord>("/harvests", "POST", {
+  const createdHarvest = await request<CreatedRecord>("/harvests", "POST", {
     hiveId,
     harvestedAt: today,
     honeyMl: 100,
     propolisG: 1.5,
   });
+  const editedHarvest = await request<CreatedRecord & { honeyMl: number }>(
+    `/harvests/${createdHarvest.id}`,
+    "PATCH",
+    { hiveId, harvestedAt: today, honeyMl: 125, propolisG: 1.5 },
+  );
+  assert.equal(editedHarvest.honeyMl, 125);
 
   const match = await request<CreatedRecord>(`/hives/by-code/${code}`);
   assert.equal(match.id, hiveId);
   const detail = await request<HiveDetail>(`/hives/${hiveId}`);
   assert.equal(detail.hive.status, "Strong");
-  assert.equal(detail.totals.honeyMl, 100);
+  assert.equal(detail.totals.honeyMl, 125);
   assert.equal(detail.totals.propolisG, 1.5);
   assert.equal(detail.totals.inspectionCount, 2);
   const harvestPage = await request<Page>(`/harvests?hiveId=${hiveId}&limit=1`);
@@ -100,6 +106,9 @@ try {
   assert.ok(exported.hives.some((item) => item.id === hiveId));
   assert.equal(exported.harvests.filter((item) => item.hiveId === hiveId).length, 1);
   assert.equal(exported.inspections.filter((item) => item.hiveId === hiveId).length, 2);
+  await request<{ ok: true }>(`/harvests/${createdHarvest.id}`, "DELETE");
+  const afterDelete = await request<Page>(`/harvests?hiveId=${hiveId}`);
+  assert.equal(afterDelete.items.length, 0);
   console.log("Local API smoke test passed");
 } finally {
   if (hiveId) {

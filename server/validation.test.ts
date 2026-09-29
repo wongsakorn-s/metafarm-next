@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { harvestInput, hiveInput, inspectionInput } from "./validation";
+import { harvestInput, harvestUpdate, hiveInput, inspectionInput } from "./validation";
 
 describe("API input validation", () => {
   it("normalizes hive codes", () => {
@@ -16,6 +16,25 @@ describe("API input validation", () => {
         harvestedAt: "2026-09-28",
         honeyMl: -1,
         propolisG: 0,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("validates historical harvest changes", () => {
+    expect(
+      harvestUpdate.safeParse({
+        hiveId: crypto.randomUUID(),
+        harvestedAt: "2026-09-30",
+        honeyMl: 10,
+        propolisG: 0.5,
+      }).success,
+    ).toBe(true);
+    expect(
+      harvestUpdate.safeParse({
+        hiveId: crypto.randomUUID(),
+        harvestedAt: "2026-02-30",
+        honeyMl: 10,
+        propolisG: 0.5,
       }).success,
     ).toBe(false);
   });

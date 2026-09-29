@@ -5,32 +5,36 @@ import { Field } from "../../components/ui/Field";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
 import { th } from "../../i18n/th";
-import type { Hive } from "../../lib/api";
+import type { Harvest, Hive } from "../../lib/api";
 
 export function HarvestForm({
   hives,
   today,
   busy,
   defaultHiveId,
+  initial,
   onSubmit,
 }: {
   hives: Hive[];
   today: string;
   busy: boolean;
   defaultHiveId?: string;
+  initial?: Harvest;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   return (
     <Card>
       <form onSubmit={onSubmit} className="space-y-4">
-        <h2 className="text-lg font-bold">{th.admin.addHarvest}</h2>
+        <h2 className="text-lg font-bold">
+          {initial ? th.admin.editHarvest : th.admin.addHarvest}
+        </h2>
         <Field label={th.admin.hive} required>
           {(id) => (
             <Select
               id={id}
               required
               name="hiveId"
-              defaultValue={defaultHiveId ?? ""}
+              defaultValue={initial?.hiveId ?? defaultHiveId ?? ""}
             >
               <option value="">{th.admin.selectHive}</option>
               {hives.map((hive) => (
@@ -48,7 +52,7 @@ export function HarvestForm({
               required
               type="date"
               name="harvestedAt"
-              defaultValue={today}
+              defaultValue={initial?.harvestedAt ?? today}
             />
           )}
         </Field>
@@ -62,7 +66,7 @@ export function HarvestForm({
               max="1000000"
               step="1"
               name="honeyMl"
-              defaultValue="0"
+              defaultValue={initial?.honeyMl ?? 0}
               inputMode="numeric"
             />
           )}
@@ -77,7 +81,7 @@ export function HarvestForm({
               max="1000000"
               step="0.01"
               name="propolisG"
-              defaultValue="0"
+              defaultValue={initial?.propolisG ?? 0}
               inputMode="decimal"
             />
           )}
@@ -88,7 +92,7 @@ export function HarvestForm({
           full
           className="sticky bottom-0 z-10 shadow-float lg:static lg:shadow-none"
         >
-          {busy ? th.common.saving : th.admin.addHarvest}
+          {busy ? th.common.saving : initial ? th.admin.saveEdit : th.admin.addHarvest}
         </Button>
         {!hives.length && (
           <p className="text-sm text-warning-700">{th.admin.needHiveHarvest}</p>

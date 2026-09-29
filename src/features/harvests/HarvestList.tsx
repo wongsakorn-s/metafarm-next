@@ -1,22 +1,66 @@
+import { useState, type FormEvent } from "react";
+import { canEditHistoryRecord } from "../../../shared/historyPermissions";
+import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { DateRangeFilter } from "../../components/ui/DateRangeFilter";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { LoadMore } from "../../components/ui/LoadMore";
+import { Sheet } from "../../components/ui/Sheet";
 import { th } from "../../i18n/th";
-import type { Harvest } from "../../lib/api";
+import type { Harvest, Hive, Staff } from "../../lib/api";
 import { formatFarmDate, formatFarmNumber } from "../../lib/date";
 import type { HistoryView } from "../../lib/useHistory";
+import { HarvestForm } from "./HarvestForm";
 
 export function HarvestList({
   history,
   hiveName,
   resetToken,
+  hives,
+  actor,
+  busy,
+  today,
+  onEdit,
+  onDelete,
 }: {
   history: HistoryView<Harvest>;
   hiveName: (id: string) => string;
   resetToken: number;
+  hives: Hive[];
+  actor: Staff;
+  busy: boolean;
+  today: string;
+  onEdit: (id: string, event: FormEvent<HTMLFormElement>) => Promise<boolean>;
+  onDelete: (id: string) => Promise<boolean>;
 }) {
   const harvests = history.items;
+  const [editing, setEditing] = useState<Harvest | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Harvest | null>(null);
+
+  function actions(record: Harvest) {
+    const editable = canEditHistoryRecord(
+      actor,
+      record.createdByEmail,
+      new Date(record.createdAt),
+    );
+    if (!editable && actor.role !== "owner") return null;
+    return (
+      <div className="flex flex-wrap gap-2">
+        {editable && (
+          <Button variant="outline" disabled={busy} onClick={() => setEditing(record)}>
+            {th.admin.editHarvest}
+          </Button>
+        )}
+        {actor.role === "owner" && (
+          <Button variant="outline" disabled={busy} onClick={() => setPendingDelete(record)}>
+            {th.admin.deleteHarvest}
+          </Button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div>
       <h2 className="mb-3 text-lg font-bold">{th.admin.latest}</h2>
@@ -64,6 +108,7 @@ export function HarvestList({
                     </strong>
                   </p>
                 </div>
+                <div className="mt-4">{actions(record)}</div>
               </Card>
             ))}
           </div>
@@ -77,6 +122,7 @@ export function HarvestList({
                   <th scope="col">{th.admin.hive}</th>
                   <th scope="col">{th.admin.honey}</th>
                   <th scope="col">{th.admin.propolis}</th>
+                  <th scope="col">{th.admin.actions}</th>
                 </tr>
               </thead>
               <tbody>
@@ -90,6 +136,7 @@ export function HarvestList({
                     <td>
                       {formatFarmNumber(record.propolisG)} {th.common.grams}
                     </td>
+                    <td className="py-2">{actions(record)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -102,6 +149,36 @@ export function HarvestList({
         loading={history.loading}
         error={history.errorSource === "more" ? history.error : ""}
         onClick={history.loadMore}
+      />
+      <Sheet
+        open={editing !== null}
+        title={th.admin.editHarvest}
+        onClose={() => setEditing(null)}
+      >
+        {editing && (
+          <HarvestForm
+            key={editing.id}
+            hives={hives}
+            today={today}
+            busy={busy}
+            initial={editing}
+            onSubmit={async (event) => {
+              if (await onEdit(editing.id, event)) setEditing(null);
+            }}
+          />
+        )}
+      </Sheet>
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={th.admin.confirmDeleteHarvest}
+        description={th.admin.deleteHarvestWarning}
+        confirmLabel={th.admin.deleteHarvest}
+        destructive
+        busy={busy}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={async () => {
+          if (pendingDelete && await onDelete(pendingDelete.id)) setPendingDelete(null);
+        }}
       />
     </div>
   );

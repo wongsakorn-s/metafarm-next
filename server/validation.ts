@@ -25,6 +25,8 @@ export const harvestInput = z.object({
   propolisG: z.number().min(0).max(1_000_000),
 });
 
+export const harvestUpdate = harvestInput;
+
 export const inspectionInput = z.object({
   hiveId: z.uuid(),
   inspectedAt: day,

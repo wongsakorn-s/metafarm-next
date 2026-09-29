@@ -172,6 +172,40 @@ export function AdminPage() {
       });
     });
   }
+  async function mutateHarvest(action: () => Promise<unknown>): Promise<boolean> {
+    setBusy(true);
+    setNotice(null);
+    try {
+      await action();
+      await refresh();
+      setSavedVersion((version) => version + 1);
+      setNotice({ message: th.admin.saved, kind: "success" });
+      return true;
+    } catch (cause) {
+      setNotice({
+        message: cause instanceof Error ? cause.message : th.admin.saveFailed,
+        kind: "error",
+      });
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function editHarvest(id: string, event: FormEvent<HTMLFormElement>): Promise<boolean> {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    return mutateHarvest(() => api(`/harvests/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        ...values,
+        honeyMl: Number(values.honeyMl),
+        propolisG: Number(values.propolisG),
+      }),
+    }));
+  }
+  async function deleteHarvest(id: string): Promise<boolean> {
+    return mutateHarvest(() => api(`/harvests/${id}`, { method: "DELETE" }));
+  }
   async function createInspection(event: FormEvent<HTMLFormElement>) {
     const form = event.currentTarget;
     await submit(event, async () => {
@@ -321,6 +355,12 @@ export function AdminPage() {
                     history={harvestHistory}
                     hiveName={hiveName}
                     resetToken={savedVersion}
+                    hives={data.hives}
+                    actor={data.staff}
+                    busy={busy}
+                    today={today}
+                    onEdit={editHarvest}
+                    onDelete={deleteHarvest}
                   />
                 }
               />

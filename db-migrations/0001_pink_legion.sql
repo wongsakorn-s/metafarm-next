@@ -1,0 +1,1 @@
+ALTER TABLE "harvests" ADD COLUMN "created_by_email" varchar(254);

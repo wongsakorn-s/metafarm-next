@@ -22,6 +22,7 @@ export const harvests = pgTable('harvests', {
   harvestedAt: date('harvested_at', { mode: 'string' }).notNull(),
   honeyMl: integer('honey_ml').notNull().default(0),
   propolisG: real('propolis_g').notNull().default(0),
+  createdByEmail: varchar('created_by_email', { length: 254 }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
 

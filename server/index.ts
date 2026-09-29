@@ -8,6 +8,7 @@ import { harvests, hives, inspections, staff } from "./db/schema";
 import { getStaff, type AppEnv, type StaffSession } from "./auth";
 import {
   harvestInput,
+  harvestUpdate,
   hiveInput,
   hiveUpdate,
   inspectionInput,
@@ -16,7 +17,7 @@ import {
 import { handleError, HttpError, jsonBody, photoBody } from "./http";
 import { detectImageMime } from "./image";
 import { dateRangeQuery, historyQuery, pageResult } from "./pagination";
-import { requireOwner } from "./authorization";
+import { canEditHistoryRecord, requireOwner } from "./authorization";
 
 const bindings = env as AppEnv;
 const app = express();
@@ -357,9 +358,47 @@ app.post("/api/harvests", async (req, res) => {
   await assertHive(input.hiveId);
   const [record] = await database()
     .insert(harvests)
-    .values({ id: crypto.randomUUID(), ...input })
+    .values({ id: crypto.randomUUID(), ...input, createdByEmail: session(res).email })
     .returning();
   res.status(201).json(record);
+});
+
+app.patch("/api/harvests/:id", async (req, res) => {
+  const id = z.uuid().parse(req.params.id);
+  const input = harvestUpdate.parse(req.body);
+  const db = database();
+  const [current] = await db.select().from(harvests).where(eq(harvests.id, id)).limit(1);
+  if (!current) throw new HttpError(404, "ไม่พบรายการผลผลิต");
+  const actor = session(res);
+  if (!canEditHistoryRecord(actor, current.createdByEmail, current.createdAt)) {
+    throw new HttpError(403, "ไม่มีสิทธิ์แก้ไขรายการผลผลิตนี้");
+  }
+  await assertHive(input.hiveId);
+  const [updated] = await db
+    .update(harvests)
+    .set(input)
+    .where(and(
+      eq(harvests.id, id),
+      actor.role === "staff" ? eq(harvests.createdByEmail, actor.email) : undefined,
+      actor.role === "staff"
+        ? gte(harvests.createdAt, sql`now() - interval '24 hours'`)
+        : undefined,
+      actor.role === "staff" ? lte(harvests.createdAt, sql`now()`) : undefined,
+    ))
+    .returning();
+  if (!updated) throw new HttpError(403, "หมดเวลาแก้ไขรายการผลผลิตนี้");
+  res.json(updated);
+});
+
+app.delete("/api/harvests/:id", async (req, res) => {
+  requireOwner(session(res));
+  const id = z.uuid().parse(req.params.id);
+  const [removed] = await database()
+    .delete(harvests)
+    .where(eq(harvests.id, id))
+    .returning({ id: harvests.id });
+  if (!removed) throw new HttpError(404, "ไม่พบรายการผลผลิต");
+  res.json({ ok: true });
 });
 
 app.post("/api/inspections", async (req, res) => {
