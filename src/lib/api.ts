@@ -22,6 +22,7 @@ export type Inspection = {
   notes: string | null;
   imageKey: string | null;
 };
+export type HistoryPage<T> = { items: T[]; nextOffset: number | null };
 export type HiveDetailData = {
   hive: Hive;
   harvests: Harvest[];

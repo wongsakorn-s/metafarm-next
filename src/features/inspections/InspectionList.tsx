@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { LoadMore } from "../../components/ui/LoadMore";
 import { Sheet } from "../../components/ui/Sheet";
 import { StatusBadge } from "../hives/StatusBadge";
 import { th } from "../../i18n/th";
@@ -15,12 +16,20 @@ export function InspectionList({
   busy,
   onUpload,
   savedVersion,
+  hasMore,
+  loadingMore,
+  loadError,
+  onLoadMore,
 }: {
   inspections: Inspection[];
   hiveName: (id: string) => string;
   busy: boolean;
   onUpload: (event: FormEvent<HTMLFormElement>, id: string) => void;
   savedVersion: number;
+  hasMore: boolean;
+  loadingMore: boolean;
+  loadError: string;
+  onLoadMore: () => void;
 }) {
   const [photoRecordId, setPhotoRecordId] = useState<string | null>(null);
   const previousVersion = useRef(savedVersion);
@@ -75,6 +84,12 @@ export function InspectionList({
           </div>
         </Card>
       ))}
+      <LoadMore
+        hasMore={hasMore}
+        loading={loadingMore}
+        error={loadError}
+        onClick={onLoadMore}
+      />
       <Sheet
         open={Boolean(photoRecord)}
         onClose={() => setPhotoRecordId(null)}

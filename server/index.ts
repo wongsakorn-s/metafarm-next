@@ -15,6 +15,7 @@ import {
 } from "./validation";
 import { handleError, HttpError, jsonBody, photoBody } from "./http";
 import { detectImageMime } from "./image";
+import { historyQuery, pageResult } from "./pagination";
 
 const bindings = env as AppEnv;
 const app = express();
@@ -242,6 +243,38 @@ app.get("/api/hives/:id", async (req, res) => {
       inspectionCount: inspectionTotals[0].count,
     },
   });
+});
+
+app.get("/api/harvests", async (req, res) => {
+  const { hiveId, offset, limit } = historyQuery.parse(req.query);
+  const rows = await database()
+    .select()
+    .from(harvests)
+    .where(hiveId ? eq(harvests.hiveId, hiveId) : undefined)
+    .orderBy(
+      desc(harvests.harvestedAt),
+      desc(harvests.createdAt),
+      desc(harvests.id),
+    )
+    .limit(limit + 1)
+    .offset(offset);
+  res.json(pageResult(rows, offset, limit));
+});
+
+app.get("/api/inspections", async (req, res) => {
+  const { hiveId, offset, limit } = historyQuery.parse(req.query);
+  const rows = await database()
+    .select()
+    .from(inspections)
+    .where(hiveId ? eq(inspections.hiveId, hiveId) : undefined)
+    .orderBy(
+      desc(inspections.inspectedAt),
+      desc(inspections.createdAt),
+      desc(inspections.id),
+    )
+    .limit(limit + 1)
+    .offset(offset);
+  res.json(pageResult(rows, offset, limit));
 });
 
 app.patch("/api/hives/:id", async (req, res) => {

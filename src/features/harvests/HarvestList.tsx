@@ -1,5 +1,6 @@
 import { Card } from "../../components/ui/Card";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { LoadMore } from "../../components/ui/LoadMore";
 import { th } from "../../i18n/th";
 import type { Harvest } from "../../lib/api";
 import { formatFarmDate, formatFarmNumber } from "../../lib/date";
@@ -7,9 +8,17 @@ import { formatFarmDate, formatFarmNumber } from "../../lib/date";
 export function HarvestList({
   harvests,
   hiveName,
+  hasMore,
+  loadingMore,
+  loadError,
+  onLoadMore,
 }: {
   harvests: Harvest[];
   hiveName: (id: string) => string;
+  hasMore: boolean;
+  loadingMore: boolean;
+  loadError: string;
+  onLoadMore: () => void;
 }) {
   if (!harvests.length)
     return (
@@ -79,6 +88,12 @@ export function HarvestList({
           </tbody>
         </table>
       </Card>
+      <LoadMore
+        hasMore={hasMore}
+        loading={loadingMore}
+        error={loadError}
+        onClick={onLoadMore}
+      />
     </div>
   );
 }

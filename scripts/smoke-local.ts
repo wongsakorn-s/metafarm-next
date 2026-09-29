@@ -17,6 +17,7 @@ type HiveDetail = {
   hive: HiveRecord;
   totals: { honeyMl: number; propolisG: number; inspectionCount: number };
 };
+type Page = { items: CreatedRecord[]; nextOffset: number | null };
 
 async function request<T>(path: string, method = "GET", body?: object): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, {
@@ -65,6 +66,16 @@ try {
   assert.equal(detail.totals.honeyMl, 100);
   assert.equal(detail.totals.propolisG, 1.5);
   assert.equal(detail.totals.inspectionCount, 2);
+  const harvestPage = await request<Page>(`/harvests?hiveId=${hiveId}&limit=1`);
+  assert.equal(harvestPage.items.length, 1);
+  assert.equal(harvestPage.nextOffset, null);
+  const firstPage = await request<Page>(`/inspections?hiveId=${hiveId}&limit=1`);
+  assert.equal(firstPage.items.length, 1);
+  assert.equal(firstPage.nextOffset, 1);
+  const nextPage = await request<Page>(`/inspections?hiveId=${hiveId}&limit=1&offset=1`);
+  assert.equal(nextPage.items.length, 1);
+  assert.equal(nextPage.nextOffset, null);
+  assert.notEqual(firstPage.items[0].id, nextPage.items[0].id);
   console.log("Local API smoke test passed");
 } finally {
   if (hiveId) {
