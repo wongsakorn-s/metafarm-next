@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Button } from "../../components/ui/Button";
+import { Button, ButtonLink } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { Sheet } from "../../components/ui/Sheet";
 import type { Hive } from "../../lib/api";
@@ -31,13 +31,14 @@ export function HiveCard({
           </div>
           <StatusBadge status={hive.status} />
         </div>
-        <Button
-          variant="outline"
-          className="mt-4"
-          onClick={() => setOpen(true)}
-        >
-          {th.admin.editData}
-        </Button>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <ButtonLink href={`/admin/hives/${hive.id}`} variant="secondary">
+            {th.admin.details}
+          </ButtonLink>
+          <Button variant="outline" onClick={() => setOpen(true)}>
+            {th.admin.editData}
+          </Button>
+        </div>
       </Card>
       <Sheet
         open={open}

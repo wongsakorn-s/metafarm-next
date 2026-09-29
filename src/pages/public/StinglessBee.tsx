@@ -102,6 +102,22 @@ export function StinglessBee() {
           <Badge tone="warning">{th.public.beeRecommended}</Badge>
           <h2 className="mt-4 text-page font-black">{th.public.nav.bee}</h2>
           <p className="mt-4 text-stone-700">{th.public.beeRecommendedIntro}</p>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-control bg-honey-50 p-4">
+              <h3 className="font-bold text-honey-900">
+                {th.public.beeStrengthTitle}
+              </h3>
+              <p className="mt-2 text-sm text-stone-700">
+                {th.public.beeStrength}
+              </p>
+            </div>
+            <div className="rounded-control bg-leaf-50 p-4">
+              <h3 className="font-bold text-leaf-800">
+                {th.public.beeUseTitle}
+              </h3>
+              <p className="mt-2 text-sm text-stone-700">{th.public.beeUse}</p>
+            </div>
+          </div>
           <ol className="mt-5 space-y-3">
             {th.public.beeDetails.map((detail, index) => (
               <li

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { th } from "../../i18n/th";
 
-export type AdminSection = "hives" | "harvests" | "inspections" | "team";
+export type AdminSection = "hives" | "harvests" | "inspections" | "qr" | "team";
 const sections: {
   id: AdminSection;
   label: string;
@@ -29,6 +29,13 @@ const sections: {
     mobileLabel: th.admin.inspectionsShort,
     description: th.admin.inspectionsDescription,
     icon: "✓",
+  },
+  {
+    id: "qr",
+    label: th.admin.qrLabels,
+    mobileLabel: "QR",
+    description: th.admin.qrDescription,
+    icon: "▦",
   },
   {
     id: "team",
@@ -63,7 +70,7 @@ export function AdminLayout({
       <a href="#main-content" className="skip-link">
         {th.common.skip}
       </a>
-      <aside className="hidden border-r border-stone-200 bg-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:p-5">
+      <aside className="hidden border-r border-stone-200 bg-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:p-5 print:hidden">
         <a
           href="/"
           aria-label={th.public.logoHome}
@@ -107,7 +114,7 @@ export function AdminLayout({
       </aside>
 
       <div className="min-w-0">
-        <header className="border-b border-stone-200 bg-white lg:hidden">
+        <header className="border-b border-stone-200 bg-white lg:hidden print:hidden">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2 sm:px-6">
             <a href="/" aria-label={th.public.logoHome}>
               <img
@@ -131,7 +138,7 @@ export function AdminLayout({
           tabIndex={-1}
           className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 lg:px-8 lg:py-8"
         >
-          <div className="mb-4 lg:mb-6">
+          <div className="mb-4 lg:mb-6 print:hidden">
             <p className="text-xs font-bold text-honey-700">
               {th.admin.farmManagement}
             </p>
@@ -149,7 +156,7 @@ export function AdminLayout({
       {role && (
         <nav
           aria-label={th.admin.adminNavMobile}
-          className="safe-bottom fixed inset-x-0 bottom-0 z-30 grid border-t border-stone-200 bg-white px-2 pt-1 shadow-float lg:hidden"
+          className="safe-bottom fixed inset-x-0 bottom-0 z-30 grid border-t border-stone-200 bg-white px-2 pt-1 shadow-float lg:hidden print:hidden"
           style={{
             gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))`,
           }}

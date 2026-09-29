@@ -10,6 +10,7 @@
     "preview": "bun --env-file=.dev.vars scripts/verify-development-db.ts && wrangler dev --port 4173",
     "check": "tsc --noEmit",
     "test": "vitest run",
+    "smoke:local": "bun --env-file=.dev.vars scripts/smoke-local.ts",
     "gen": "wrangler types",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
@@ -21,6 +22,8 @@
     "drizzle-orm": "^0.45.2",
     "express": "^5.1.0",
     "jose": "^6.1.0",
+    "jsqr": "^1.4.0",
+    "qrcode.react": "^4.2.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "zod": "^4.1.0"

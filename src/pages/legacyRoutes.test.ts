@@ -8,7 +8,7 @@ describe("old admin entry URLs", () => {
     ["/hives", "/admin#hives"],
     ["/hives/MF-001", "/admin#hives"],
     ["/users", "/admin#team"],
-    ["/print-qr", "/admin#hives"],
+    ["/print-qr", "/admin#qr"],
   ])("routes %s through the protected admin page", (path, destination) => {
     expect(legacyAdminDestination(path)).toBe(destination);
   });
