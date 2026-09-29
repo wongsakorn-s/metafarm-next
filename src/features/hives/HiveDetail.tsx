@@ -24,12 +24,15 @@ import { HarvestForm } from "../harvests/HarvestForm";
 import { InspectionForm } from "../inspections/InspectionForm";
 
 export function HiveDetail({
-  hiveId, owner, hives, today, busy, savedVersion,
+  hiveId, owner, hives, actorEmail, today, busy, savedVersion,
   onEditHarvest, onDeleteHarvest, onEditInspection, onDeleteInspection,
+  onCreateInspection,
+  onCreateInput,
 }: {
   hiveId: string;
   owner: boolean;
   hives: Hive[];
+  actorEmail: string;
   today: string;
   busy: boolean;
   savedVersion: number;
@@ -37,6 +40,8 @@ export function HiveDetail({
   onDeleteHarvest: (id: string) => Promise<boolean>;
   onEditInspection: (id: string, event: FormEvent<HTMLFormElement>) => Promise<boolean>;
   onDeleteInspection: (id: string) => Promise<boolean>;
+  onCreateInspection: (event: FormEvent<HTMLFormElement>) => Promise<boolean>;
+  onCreateInput: (form: HTMLFormElement, fieldName: string) => void;
 }) {
   const [data, setData] = useState<HiveDetailData | null>(null);
   const [error, setError] = useState("");
@@ -44,6 +49,7 @@ export function HiveDetail({
   const [deletingHarvest, setDeletingHarvest] = useState<Harvest | null>(null);
   const [editingInspection, setEditingInspection] = useState<Inspection | null>(null);
   const [deletingInspection, setDeletingInspection] = useState<Inspection | null>(null);
+  const [inspectionOpen, setInspectionOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"records" | "audit">("records");
   const [auditRows, setAuditRows] = useState<AuditEntry[] | null>(null);
   const [auditError, setAuditError] = useState("");
@@ -131,9 +137,9 @@ export function HiveDetail({
         <ButtonLink href={`/admin${hiveQuery}#harvests`}>
           {th.admin.addHarvest}
         </ButtonLink>
-        <ButtonLink href={`/admin${hiveQuery}#inspections`} variant="secondary">
+        <Button variant="secondary" onClick={() => setInspectionOpen(true)}>
           {th.admin.addInspection}
-        </ButtonLink>
+        </Button>
       </div>}
       <div className="grid gap-3 sm:grid-cols-3">
         <Card>
@@ -285,6 +291,13 @@ export function HiveDetail({
       <Sheet open={editingHarvest !== null} onClose={() => setEditingHarvest(null)} title={th.admin.editHarvest}>
         {editingHarvest && <HarvestForm key={editingHarvest.id} initial={editingHarvest} hives={hives} today={today} busy={busy}
           onSubmit={async (event) => { if (await onEditHarvest(editingHarvest.id, event)) setEditingHarvest(null); }} />}
+      </Sheet>
+      <Sheet open={inspectionOpen} onClose={() => setInspectionOpen(false)} title={th.admin.addInspection}>
+        <InspectionForm hives={hives} lockedHiveId={hive.id} actorEmail={actorEmail} today={today} busy={busy}
+          onInputChange={onCreateInput}
+          onSubmit={async (event) => {
+            if (await onCreateInspection(event)) setInspectionOpen(false);
+          }} />
       </Sheet>
       <Sheet open={editingInspection !== null} onClose={() => setEditingInspection(null)} title={th.admin.editInspection}>
         {editingInspection && <InspectionForm key={editingInspection.id} initial={editingInspection} hives={hives} today={today} busy={busy}

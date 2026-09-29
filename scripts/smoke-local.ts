@@ -2,7 +2,7 @@ import "./verify-development-db";
 import assert from "node:assert/strict";
 import { eq, inArray } from "drizzle-orm";
 import { getDb } from "../server/db";
-import { auditLogs, harvests, hives, inspections, staff } from "../server/db/schema";
+import { auditLogs, harvests, hives, idempotencyKeys, inspections, staff } from "../server/db/schema";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL ไม่พร้อมใช้งาน");
@@ -28,10 +28,13 @@ type ExportData = {
 type AuditPage = { items: Array<{ action: string; entity: string; entityId: string }> };
 type Summary = { summary: { hiveCount: number; harvestCount: number; inspectionCount: number; totalHoneyMl: number } };
 
-async function request<T>(path: string, method = "GET", body?: object): Promise<T> {
+async function request<T>(path: string, method = "GET", body?: object, key?: string): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, {
     method,
-    headers: body ? { "Content-Type": "application/json" } : undefined,
+    headers: {
+      ...(body ? { "Content-Type": "application/json" } : {}),
+      ...(key ? { "Idempotency-Key": key } : {}),
+    },
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!response.ok) {
@@ -42,6 +45,7 @@ async function request<T>(path: string, method = "GET", body?: object): Promise<
 
 let hiveId: string | undefined;
 const recordIds: string[] = [];
+const retryKeys: string[] = [];
 try {
   const baseline = await request<Summary>(`/dashboard?month=${today.slice(0, 7)}`);
   const hive = await request<HiveRecord>("/hives", "POST", {
@@ -51,27 +55,45 @@ try {
   hiveId = hive.id;
   assert.equal(hive.status, "Normal");
 
-  const firstInspection = await request<CreatedRecord>("/inspections", "POST", {
+  const inspectionKey = crypto.randomUUID();
+  retryKeys.push(inspectionKey);
+  const inspectionInput = {
     hiveId,
     inspectedAt: today,
     status: "Strong",
     notes: "temporary smoke test",
-  });
+  };
+  const firstInspection = await request<CreatedRecord>("/inspections", "POST", inspectionInput, inspectionKey);
   assert.ok(firstInspection.id);
+  const retriedInspection = await request<CreatedRecord>("/inspections", "POST", inspectionInput, inspectionKey);
+  assert.equal(retriedInspection.id, firstInspection.id);
   recordIds.push(firstInspection.id);
+  const secondInspectionKey = crypto.randomUUID();
+  retryKeys.push(secondInspectionKey);
   const secondInspection = await request<CreatedRecord>("/inspections", "POST", {
     hiveId,
     inspectedAt: today,
-  });
+  }, secondInspectionKey);
   assert.ok(secondInspection.id);
   recordIds.push(secondInspection.id);
-  const createdHarvest = await request<CreatedRecord>("/harvests", "POST", {
+  const harvestKey = crypto.randomUUID();
+  retryKeys.push(harvestKey);
+  const harvestInput = {
     hiveId,
     harvestedAt: today,
     honeyMl: 100,
     propolisG: 1.5,
-  });
+  };
+  const createdHarvest = await request<CreatedRecord>("/harvests", "POST", harvestInput, harvestKey);
+  const retriedHarvest = await request<CreatedRecord>("/harvests", "POST", harvestInput, harvestKey);
+  assert.equal(retriedHarvest.id, createdHarvest.id);
   recordIds.push(createdHarvest.id);
+  const conflictingRetry = await fetch(`${baseUrl}/harvests`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": harvestKey },
+    body: JSON.stringify({ ...harvestInput, honeyMl: 999 }),
+  });
+  assert.equal(conflictingRetry.status, 409);
   const editedHarvest = await request<CreatedRecord & { honeyMl: number }>(
     `/harvests/${createdHarvest.id}`,
     "PATCH",
@@ -173,6 +195,7 @@ try {
   console.log("Local API smoke test passed");
 } finally {
   if (hiveId) {
+    await db.delete(idempotencyKeys).where(inArray(idempotencyKeys.key, retryKeys));
     await db.delete(auditLogs).where(inArray(auditLogs.entityId, [hiveId, ...recordIds, teamEmail]));
     await db.delete(staff).where(eq(staff.email, teamEmail));
     await db.delete(inspections).where(eq(inspections.hiveId, hiveId));

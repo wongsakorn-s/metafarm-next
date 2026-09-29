@@ -212,3 +212,131 @@ test("เจ้าของเปิดรังเก็บถาวรแล�
   await page.getByRole("tab", { name: th.admin.auditHistory }).click();
   await expect(page.getByRole("tabpanel", { name: th.admin.auditHistory }).getByText("owner@example.com", { exact: false })).toBeVisible();
 });
+
+test("สแกน URL ของเราแล้วเปิดรายละเอียดรัง แต่ URL ภายนอกถูกปฏิเสธ", async ({ page }) => {
+  await mockApi(page);
+  await page.route("**/api/hives/by-code/MF-E2E-001", (route) =>
+    route.fulfill({ json: { id: hiveId, code: hive.code } }),
+  );
+  await page.goto("/admin/qr/MF-E2E-001");
+  await expect(page).toHaveURL(new RegExp(`/admin/hives/${hiveId}$`));
+  await page.goto("/admin#qr");
+  await page.getByLabel(th.admin.qrCodeLabel).fill("https://evil.example/admin/qr/MF-E2E-001");
+  await page.getByRole("button", { name: th.admin.openHive }).click();
+  await expect(page.getByText(th.admin.invalidQr)).toBeVisible();
+});
+
+test("ป้าย QR พิมพ์เป็น A4 สามคอลัมน์และเลือกรังได้", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/admin#qr");
+  await expect(page.locator(".qr-print svg")).toHaveCount(1);
+  await expect(page.locator(".qr-print svg title")).toHaveText(`${th.admin.hiveCode} ${hive.code}`);
+  await page.getByRole("button", { name: th.admin.clearSelectedHives }).click();
+  await expect(page.locator(".qr-print svg")).toHaveCount(0);
+  await page.getByRole("button", { name: th.admin.selectAllHives }).click();
+  await page.emulateMedia({ media: "print" });
+  const columns = await page.locator(".qr-print").evaluate((element) =>
+    getComputedStyle(element).gridTemplateColumns.split(" ").length,
+  );
+  expect(columns).toBe(3);
+  const pdf = await page.pdf({ format: "A4" });
+  expect(pdf.subarray(0, 4).toString()).toBe("%PDF");
+});
+
+test("หน้ารังเปิด Sheet ตรวจรังทันทีและอยู่หน้าเดิมหลังบันทึก", async ({ page }) => {
+  await mockApi(page);
+  const newInspection = {
+    ...dashboard.inspections[0],
+    id: "cf8f4014-c39c-43ce-acef-57c3d35f0b75",
+    notes: "ตรวจจากหน้ารัง",
+  };
+  let created = false;
+  await page.route(`**/api/hives/${hiveId}`, async (route) => {
+    await route.fulfill({ json: {
+      hive,
+      harvests: dashboard.harvests,
+      inspections: created ? [newInspection, ...dashboard.inspections] : dashboard.inspections,
+      totals: { harvestCount: 1, honeyMl: 125, propolisG: 3, inspectionCount: created ? 2 : 1 },
+    } });
+  });
+  await page.route("**/api/inspections", async (route) => {
+    created = true;
+    await route.fulfill({ status: 201, json: newInspection });
+  });
+  await page.goto(`/admin/hives/${hiveId}`);
+  await page.getByRole("button", { name: th.admin.addInspection, exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: th.admin.addInspection });
+  await expect(dialog.locator('input[name="hiveId"]')).toHaveValue(hiveId);
+  await dialog.getByLabel(th.admin.notes).fill(newInspection.notes);
+  await dialog.getByRole("button", { name: th.admin.addInspection }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/admin/hives/${hiveId}$`));
+  await expect(page.getByText(newInspection.notes)).toBeVisible();
+});
+
+test("draft ผลผลิตกลับมาหลังปิดแท็บ และปุ่มบันทึกปิดเมื่อออฟไลน์", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/admin#harvests");
+  await page.locator('main select[name="hiveId"]').selectOption(hiveId);
+  await page.getByLabel(th.admin.honeyMl).fill("123");
+  await expect(page.getByText(th.admin.unsavedDraft)).toBeVisible();
+  await page.reload();
+  await expect(page.locator('main select[name="hiveId"]')).toHaveValue(hiveId);
+  await expect(page.getByLabel(th.admin.honeyMl)).toHaveValue("123");
+  await page.context().setOffline(true);
+  await expect(page.getByRole("button", { name: th.admin.addHarvest })).toBeDisabled();
+  await expect(page.getByText(th.admin.offline)).toBeVisible();
+});
+
+test("ตอบกลับสร้างผลผลิตครั้งแรกหายแล้ว retry ใช้คีย์เดิม", async ({ page }) => {
+  await mockApi(page);
+  const keys: string[] = [];
+  let created = 0;
+  await page.route("**/api/harvests", async (route) => {
+    const key = route.request().headers()["idempotency-key"];
+    keys.push(key);
+    if (created === 0) {
+      created += 1;
+      await route.abort("failed");
+    } else {
+      await route.fulfill({ status: 201, json: dashboard.harvests[0] });
+    }
+  });
+  await page.goto("/admin#harvests");
+  await page.locator('main select[name="hiveId"]').selectOption(hiveId);
+  await page.getByRole("button", { name: th.admin.addHarvest }).click();
+  await expect(page.getByText(th.common.networkError)).toBeVisible();
+  await page.getByRole("button", { name: th.admin.addHarvest }).click();
+  await expect.poll(() => keys.length).toBe(2);
+  expect(keys[0]).toBe(keys[1]);
+  expect(created).toBe(1);
+});
+
+test("บันทึกตรวจสำเร็จแต่รูปอัปโหลดไม่ผ่าน แล้วลองอัปโหลดซ้ำได้", async ({ page }) => {
+  await mockApi(page);
+  await page.setViewportSize({ width: 375, height: 800 });
+  const inspection = { ...dashboard.inspections[0], id: "ed714789-d96b-4d32-ad5f-92257b53cdae" };
+  let creates = 0;
+  let uploads = 0;
+  await page.route("**/api/inspections", async (route) => {
+    creates += 1;
+    await route.fulfill({ status: 201, json: inspection });
+  });
+  await page.route(`**/api/inspections/${inspection.id}/photo`, async (route) => {
+    uploads += 1;
+    if (uploads === 1) await route.fulfill({ status: 503, json: { error: "อัปโหลดไม่สำเร็จ" } });
+    else await route.fulfill({ json: { ...inspection, imageKey: "photo-key" } });
+  });
+  await page.goto("/admin#inspections");
+  await page.getByRole("button", { name: `＋ ${th.admin.addInspection}` }).click();
+  const dialog = page.getByRole("dialog", { name: th.admin.addInspection });
+  await dialog.locator('select[name="hiveId"]').selectOption(hiveId);
+  await dialog.locator('input[type="file"]').setInputFiles("public/pictures/Picture2.png");
+  await dialog.getByRole("button", { name: th.admin.addInspection }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByText(th.admin.uploadPartial, { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: th.admin.retryPhotoUpload }).click();
+  await expect(page.getByRole("button", { name: th.admin.retryPhotoUpload })).toHaveCount(0);
+  expect(creates).toBe(1);
+  expect(uploads).toBe(2);
+});

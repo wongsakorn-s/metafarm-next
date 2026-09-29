@@ -23,6 +23,7 @@ import { dateRangeQuery, historyQuery, pageResult } from "./pagination";
 import { canEditHistoryRecord, historyPermissions, requireOwner } from "./authorization";
 import { getCurrentWeather } from "./weather";
 import { auditedChange, noPreviousRecord } from "./audit";
+import { prepareIdempotency, replayAfterConflict } from "./idempotency";
 
 const bindings = env as AppEnv;
 const app = express();
@@ -459,24 +460,51 @@ app.post("/api/hives/:id/restore", async (req, res) => {
 
 app.post("/api/harvests", async (req, res) => {
   const input = harvestInput.parse(req.body);
+  const db = database();
+  const actor = session(res);
+  const replay = await prepareIdempotency(req, db, actor.email, "create-harvest", input);
+  if (replay.previousResponse) return void res.status(201).json(replay.previousResponse);
   await assertHive(input.hiveId);
   const id = crypto.randomUUID();
-  const db = database();
-  const changed = await auditedChange(db, {
-    before: noPreviousRecord,
-    change: sql`INSERT INTO harvests
-      (id, hive_id, harvested_at, honey_ml, propolis_g, created_by, created_by_email)
-      SELECT ${id}::uuid, h.id, ${input.harvestedAt}::date,
-        ${input.honeyMl}, ${input.propolisG}, ${session(res).email}, ${session(res).email}
-      FROM hives h WHERE h.id = ${input.hiveId}::uuid AND h.archived_at IS NULL
-      FOR SHARE OF h
-      RETURNING *`,
-    actorEmail: session(res).email,
-    action: "create", entity: "harvest", entityId: id,
-  });
-  if (!changed) throw new HttpError(409, "รังนี้ถูกเก็บถาวรแล้ว ไม่สามารถเพิ่มบันทึกใหม่ได้");
-  const [record] = await db.select().from(harvests).where(eq(harvests.id, id));
-  res.status(201).json(withHistoryPermissions(record, session(res)));
+  const result = await db.execute(sql`
+    WITH eligible_hive AS MATERIALIZED (
+      SELECT id FROM hives h WHERE id = ${input.hiveId}::uuid
+        AND archived_at IS NULL FOR SHARE
+    ),
+    claimed AS (
+      INSERT INTO idempotency_keys (key, actor, operation, request_hash, response, created_at)
+      SELECT ${replay.key}::uuid, ${actor.email}, ${replay.operation}, ${replay.requestHash},
+        jsonb_build_object(
+          'id', ${id}::text, 'hiveId', ${input.hiveId}::text,
+          'harvestedAt', ${input.harvestedAt}::text,
+          'honeyMl', ${input.honeyMl}::integer, 'propolisG', ${input.propolisG}::real,
+          'createdByEmail', ${actor.email}::text, 'createdBy', ${actor.email}::text,
+          'createdAt', ${replay.createdAt}::text, 'updatedAt', NULL, 'updatedBy', NULL,
+          'deletedAt', NULL,
+          'permissions', jsonb_build_object('canEdit', true, 'canDelete', ${actor.role === "owner"}::boolean)
+        ), ${replay.createdAt}::timestamptz
+      FROM eligible_hive WHERE true
+      ON CONFLICT (key) DO NOTHING RETURNING response
+    ),
+    created AS (
+      INSERT INTO harvests
+        (id, hive_id, harvested_at, honey_ml, propolis_g, created_by,
+          created_by_email, created_at)
+      SELECT ${id}::uuid, eligible_hive.id, ${input.harvestedAt}::date,
+        ${input.honeyMl}, ${input.propolisG}, ${actor.email}, ${actor.email},
+        ${replay.createdAt}::timestamptz
+      FROM eligible_hive CROSS JOIN claimed RETURNING *
+    ),
+    logged AS (
+      INSERT INTO audit_logs (id, actor_email, action, entity, entity_id, before, after)
+      SELECT ${crypto.randomUUID()}::uuid, ${actor.email}, 'create', 'harvest',
+        ${id}, NULL::jsonb, to_jsonb(created) FROM created RETURNING id
+    )
+    SELECT claimed.response FROM claimed CROSS JOIN logged
+  `);
+  if (result.rows[0]) return void res.status(201).json(result.rows[0].response);
+  await assertHive(input.hiveId);
+  res.status(201).json(await replayAfterConflict(db, replay));
 });
 
 app.patch("/api/harvests/:id", async (req, res) => {
@@ -529,24 +557,43 @@ app.delete("/api/harvests/:id", async (req, res) => {
 
 app.post("/api/inspections", async (req, res) => {
   const input = inspectionInput.parse(req.body);
+  const db = database();
+  const actor = session(res);
+  const replay = await prepareIdempotency(req, db, actor.email, "create-inspection", input);
+  if (replay.previousResponse) return void res.status(201).json(replay.previousResponse);
   await assertHive(input.hiveId);
   const id = crypto.randomUUID();
-  const actor = session(res);
-  const db = database();
   const result = await db.execute(sql`
     WITH previous_hive AS MATERIALIZED (
-      SELECT id, to_jsonb(h) AS payload FROM hives h
+      SELECT id, status, to_jsonb(h) AS payload FROM hives h
       WHERE id = ${input.hiveId}::uuid AND archived_at IS NULL FOR UPDATE
+    ),
+    claimed AS (
+      INSERT INTO idempotency_keys (key, actor, operation, request_hash, response, created_at)
+      SELECT ${replay.key}::uuid, ${actor.email}, ${replay.operation}, ${replay.requestHash},
+        jsonb_build_object(
+          'id', ${id}::text, 'hiveId', ${input.hiveId}::text,
+          'inspectedAt', ${input.inspectedAt}::text,
+          'notes', ${input.notes ?? null}::text,
+          'status', COALESCE(${input.status ?? null}::text, previous_hive.status),
+          'imageKey', NULL, 'imageMime', NULL,
+          'createdAt', ${replay.createdAt}::text, 'createdBy', ${actor.email}::text,
+          'updatedAt', NULL, 'updatedBy', NULL, 'deletedAt', NULL,
+          'permissions', jsonb_build_object('canEdit', true, 'canDelete', ${actor.role === "owner"}::boolean)
+        ), ${replay.createdAt}::timestamptz
+      FROM previous_hive WHERE true
+      ON CONFLICT (key) DO NOTHING RETURNING response
     ),
     changed_hive AS (
       UPDATE hives SET status = COALESCE(${input.status ?? null}, status)
-      WHERE id IN (SELECT id FROM previous_hive) RETURNING *
+      WHERE id IN (SELECT id FROM previous_hive) AND EXISTS (SELECT 1 FROM claimed)
+      RETURNING *
     ),
     created AS (
-      INSERT INTO inspections (id, hive_id, inspected_at, notes, status, created_by)
+      INSERT INTO inspections (id, hive_id, inspected_at, notes, status, created_by, created_at)
       SELECT ${id}::uuid, id, ${input.inspectedAt}::date, ${input.notes ?? null},
-        status, ${actor.email}
-      FROM changed_hive RETURNING *
+        status, ${actor.email}, ${replay.createdAt}::timestamptz
+      FROM changed_hive CROSS JOIN claimed RETURNING *
     ),
     logged_hive AS (
       INSERT INTO audit_logs (id, actor_email, action, entity, entity_id, before, after)
@@ -560,12 +607,11 @@ app.post("/api/inspections", async (req, res) => {
         ${id}, NULL::jsonb, to_jsonb(created)
       FROM created RETURNING id
     )
-    SELECT created.id FROM created CROSS JOIN logged_hive CROSS JOIN logged_inspection
+    SELECT claimed.response FROM claimed CROSS JOIN logged_hive CROSS JOIN logged_inspection
   `);
-  if (!result.rows.length)
-    throw new HttpError(409, "รังนี้ถูกเก็บถาวรแล้ว ไม่สามารถเพิ่มบันทึกใหม่ได้");
-  const [record] = await db.select().from(inspections).where(eq(inspections.id, id));
-  res.status(201).json(withHistoryPermissions(record, actor));
+  if (result.rows[0]) return void res.status(201).json(result.rows[0].response);
+  await assertHive(input.hiveId);
+  res.status(201).json(await replayAfterConflict(db, replay));
 });
 
 app.patch("/api/inspections/:id", async (req, res) => {

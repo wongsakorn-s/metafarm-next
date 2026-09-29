@@ -6,6 +6,8 @@ import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
 import { th } from "../../i18n/th";
 import type { Harvest, Hive } from "../../lib/api";
+import { useFieldDraft } from "../../lib/useFieldDraft";
+import { useOnlineStatus } from "../../lib/useOnlineStatus";
 
 export function HarvestForm({
   hives,
@@ -14,17 +16,29 @@ export function HarvestForm({
   defaultHiveId,
   initial,
   onSubmit,
+  onInputChange,
+  actorEmail,
 }: {
   hives: Hive[];
   today: string;
   busy: boolean;
   defaultHiveId?: string;
   initial?: Harvest;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<boolean | void>;
+  onInputChange?: (form: HTMLFormElement, fieldName: string) => void;
+  actorEmail?: string;
 }) {
+  const online = useOnlineStatus();
+  const draft = useFieldDraft("harvest", initial ? undefined : actorEmail, defaultHiveId);
   return (
     <Card>
-      <form onSubmit={onSubmit} className="space-y-4">
+      <form ref={draft.formRef} onSubmit={async (event) => {
+        const saved = await onSubmit(event);
+        if (saved === true && !initial) draft.clear();
+      }} onInput={(event) => {
+        onInputChange?.(event.currentTarget, (event.target as HTMLInputElement).name);
+        if (!initial) draft.onInput(event);
+      }} className="space-y-4">
         <h2 className="text-lg font-bold">
           {initial ? th.admin.editHarvest : th.admin.addHarvest}
         </h2>
@@ -95,12 +109,16 @@ export function HarvestForm({
         </Field>
         <Button
           type="submit"
-          disabled={busy || (!initial && !hives.length)}
+          disabled={busy || !online || (!initial && !hives.length)}
+          title={!online ? th.admin.offlineSaveDisabled : undefined}
           full
           className="sticky bottom-0 z-10 shadow-float lg:static lg:shadow-none"
         >
           {busy ? th.common.saving : initial ? th.admin.saveEdit : th.admin.addHarvest}
         </Button>
+        {draft.hasDraft && <p role="status" className="rounded-control bg-warning-50 p-3 text-sm text-warning-700">{th.admin.unsavedDraft}</p>}
+        {draft.error && <p role="alert" className="text-sm text-danger-700">{draft.error}</p>}
+        {!online && <p className="text-sm text-warning-700">{th.admin.offlineSaveDisabled}</p>}
         {!hives.length && !initial && (
           <p className="text-sm text-warning-700">{th.admin.needHiveHarvest}</p>
         )}

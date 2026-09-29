@@ -13,6 +13,7 @@ import type { HistoryView } from "../../lib/useHistory";
 import { formatFarmDate } from "../../lib/date";
 import { PhotoUpload } from "./PhotoUpload";
 import { InspectionForm } from "./InspectionForm";
+import { useOnlineStatus } from "../../lib/useOnlineStatus";
 
 export function InspectionList({
   history,
@@ -35,6 +36,7 @@ export function InspectionList({
   onUpload: (event: FormEvent<HTMLFormElement>, id: string) => void;
   savedVersion: number;
 }) {
+  const online = useOnlineStatus();
   const inspections = history.items;
   const [photoRecordId, setPhotoRecordId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Inspection | null>(null);
@@ -128,9 +130,10 @@ export function InspectionList({
               {hiveName(photoRecord.hiveId)}
             </p>
             <PhotoUpload required />
-            <Button type="submit" disabled={busy} full className="mt-5">
+            <Button type="submit" disabled={busy || !online} title={!online ? th.admin.offlineSaveDisabled : undefined} full className="mt-5">
               {busy ? th.common.saving : th.common.save}
             </Button>
+            {!online && <p className="mt-2 text-sm text-warning-700">{th.admin.offlineSaveDisabled}</p>}
           </form>
         )}
       </Sheet>

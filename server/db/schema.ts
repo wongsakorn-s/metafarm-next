@@ -59,3 +59,12 @@ export const auditLogs = pgTable('audit_logs', {
   index('audit_logs_entity_entity_id_idx').on(table.entity, table.entityId),
   index('audit_logs_created_at_desc_idx').on(table.createdAt.desc())
 ]);
+
+export const idempotencyKeys = pgTable('idempotency_keys', {
+  key: uuid('key').primaryKey(),
+  actor: varchar('actor', { length: 254 }).notNull(),
+  operation: varchar('operation', { length: 40 }).notNull(),
+  requestHash: varchar('request_hash', { length: 64 }).notNull(),
+  response: jsonb('response').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+}, (table) => [index('idempotency_keys_created_at_idx').on(table.createdAt)]);
