@@ -3,18 +3,17 @@ import { Badge } from "../../components/ui/Badge";
 import { Button, ButtonLink } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { th } from "../../i18n/th";
+import { farmPictures } from "../../content/media";
+import { FarmImage } from "../../components/public/FarmImage";
+import { beeBenefits, beeDetails, beeFacts } from "../../content/bee";
 
 const photos = [
   {
-    src: "/pictures/Picture2.png",
-    width: 396,
-    height: 277,
+    picture: farmPictures.beeFlower,
     alt: th.public.beePhotoAlt[0],
   },
   {
-    src: "/pictures/Picture3.png",
-    width: 351,
-    height: 279,
+    picture: farmPictures.beeHive,
     alt: th.public.beePhotoAlt[1],
   },
 ];
@@ -45,7 +44,7 @@ export function StinglessBee() {
           </h1>
           <p className="mt-5 text-stone-700">{th.public.beeIntro}</p>
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
-            {th.public.beeFacts.map(([heading, body]) => (
+            {beeFacts.map(([heading, body]) => (
               <Card key={heading} className="p-4">
                 <p className="font-bold text-leaf-800">{heading}</p>
                 <p className="mt-2 text-sm text-stone-700">{body}</p>
@@ -54,11 +53,10 @@ export function StinglessBee() {
           </div>
         </div>
         <div className="grid min-h-72 place-items-center rounded-hero bg-leaf-50 p-6">
-          <img
-            src={photos[0].src}
+          <FarmImage
+            picture={photos[0].picture}
             alt={photos[0].alt}
-            width={photos[0].width}
-            height={photos[0].height}
+            lazy={false}
             className="w-full max-w-[198px] rounded-card object-cover shadow-card"
           />
         </div>
@@ -67,12 +65,9 @@ export function StinglessBee() {
         <Card>
           <h2 className="text-page font-black">{th.public.beeGallery}</h2>
           <div className="mt-5 overflow-hidden rounded-card bg-stone-100">
-            <img
-              src={photos[active].src}
+            <FarmImage
+              picture={photos[active].picture}
               alt={photos[active].alt}
-              width={photos[active].width}
-              height={photos[active].height}
-              loading="lazy"
               className="mx-auto aspect-[4/3] w-full max-w-[175px] object-cover"
             />
           </div>
@@ -119,7 +114,7 @@ export function StinglessBee() {
             </div>
           </div>
           <ol className="mt-5 space-y-3">
-            {th.public.beeDetails.map((detail, index) => (
+            {beeDetails.map((detail, index) => (
               <li
                 key={detail}
                 className="flex gap-3 rounded-control bg-stone-50 p-3 text-sm text-stone-700"
@@ -136,7 +131,7 @@ export function StinglessBee() {
       <section className="mt-14">
         <h2 className="text-page font-black">{th.public.beeRole}</h2>
         <div className="mt-5 grid gap-4 md:grid-cols-3">
-          {th.public.beeBenefits.map(([heading, body]) => (
+          {beeBenefits.map(([heading, body]) => (
             <Card key={heading}>
               <h3 className="text-lg font-bold">{heading}</h3>
               <p className="mt-3 text-sm text-stone-700">{body}</p>

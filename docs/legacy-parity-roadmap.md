@@ -102,3 +102,17 @@
 - Migration `0003_cool_inhumans.sql` เพิ่ม `idempotency_keys` แบบ backward compatible; ใช้ CTE statement เดียวกับ create/audit เพื่อกันข้อมูลซ้ำ และลบ key ที่เก่ากว่า 24 ชั่วโมงก่อนคำขอสร้างใหม่
 - Rollback ที่ปลอดภัย: deploy โค้ดเดิมโดยคงตาราง `idempotency_keys` ไว้; การ drop ตารางจะทำให้คำขอ retry ที่ค้างอยู่สูญเสียการป้องกันข้อมูลซ้ำ จึงต้องรอพ้น 24 ชั่วโมงและสำรองก่อนหากจะลบจริง
 - ผลการทดสอบอุปกรณ์ที่ยังค้างระบุใน `docs/field-device-testing.md`; **ยังไม่ผ่านระดับ staging หรือ production**
+
+## Phase 4: Public Site (ข้อกำหนดล่าสุด)
+
+| ความสามารถ | ระดับที่ผ่าน | ข้อจำกัด |
+| --- | --- | --- |
+| เนื้อหาฟาร์มและสถานะเผยแพร่แยกใน `src/content` | unit + Playwright | สินค้า/อบรม/สมุดพกยัง unpublished จนเจ้าของยืนยันเนื้อหา |
+| หน้าแรกซ่อน section อบรมและหน้าเผยแพร่ไม่มี placeholder | unit + Playwright | ยังต้องให้เจ้าของตรวจความถูกต้องของเนื้อหาเดิม |
+| ช่องทางติดต่อแสดงเฉพาะค่าที่ยืนยัน | unit + ตรวจโค้ด | เบอร์ อีเมล LINE Facebook และแผนที่ยังไม่มี จึงไม่แสดง |
+| รูป AVIF/WebP responsive, ฟอนต์ self-host, วิดีโอ 1.45 MB | build + Lighthouse local | รูปต้นฉบับมีความละเอียดเพียง 396×277 และ 351×279; วิดีโอต้นฉบับ 960×544 ต่ำกว่า 720p ไม่อัปสเกลเทียม |
+| HTML prerender, canonical, OG, sitemap, robots, noindex | local Worker + Lighthouse | production hostname ยังถูก Access ครอบทั้งไซต์; crawler ภายนอกยังเข้าไม่ได้ |
+| Core Web Vitals และคะแนน Lighthouse Mobile | local Worker | ผลทั้ง 4 หน้าอยู่ใน `docs/lighthouse-local-2026-09-30.md`; ยังไม่ได้วัดบน staging/production |
+
+- ไม่มี migration ใน Phase นี้
+- วิดีโอต้นฉบับย้ายไป `assets/source-videos/` เพื่อเก็บคืนได้แต่ไม่ส่งไปกับ static assets; PWA ยังลงทะเบียนได้ แต่ปิด offline navigation fallback เพราะ HTML แต่ละ public route prerender แยกและไม่มี offline read requirement

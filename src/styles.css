@@ -1,8 +1,9 @@
+@import "@fontsource-variable/noto-sans-thai-looped/wght.css";
 @import "tailwindcss";
 
 @theme {
   --font-sans:
-    "Noto Sans Thai Looped", "Noto Sans Thai", "Segoe UI", sans-serif;
+    "Noto Sans Thai Looped Variable", "Noto Sans Thai", "Segoe UI", sans-serif;
   --color-honey-50: #fff9ed;
   --color-honey-100: #fff0cd;
   --color-honey-200: #ffda88;
