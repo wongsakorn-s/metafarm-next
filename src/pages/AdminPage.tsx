@@ -28,7 +28,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 function Card({ children }: { children: ReactNode }) {
   return (
-    <div className="border border-[#dfe5db] bg-white p-6 shadow-[0_12px_35px_rgba(23,62,48,.04)]">
+    <div className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-[0_20px_45px_-30px_rgba(68,64,60,0.35)]">
       {children}
     </div>
   );
@@ -63,7 +63,12 @@ export function AdminPage() {
     document.title = "ระบบจัดการฟาร์ม | MetaFarm";
   }, []);
   const [data, setData] = useState<Dashboard | null>(null);
-  const [section, setSection] = useState<Section>("hives");
+  const [section, setSection] = useState<Section>(() => {
+    const value = window.location.hash.slice(1);
+    return ["hives", "harvests", "inspections", "team"].includes(value)
+      ? (value as Section)
+      : "hives";
+  });
   const [notice, setNotice] = useState<{
     message: string;
     kind: "success" | "error";
@@ -78,6 +83,12 @@ export function AdminPage() {
   useEffect(() => {
     refresh().catch((cause: Error) => setLoadError(cause.message));
   }, [refresh]);
+  useEffect(() => {
+    if (data && data.staff.role !== "owner" && section === "team") {
+      setSection("hives");
+      window.history.replaceState(null, "", "#hives");
+    }
+  }, [data, section]);
 
   async function submit(
     event: FormEvent<HTMLFormElement>,
@@ -220,12 +231,12 @@ export function AdminPage() {
   }
 
   return (
-    <div className="admin-shell min-h-screen bg-[#f8f8f2] text-[#173e30]">
+    <div className="admin-shell min-h-screen bg-[#fafaf9] text-stone-900">
       <a href="#main-content" className="skip-link">
         ข้ามไปเนื้อหา
       </a>
-      <header className="border-b border-[#dcded3] bg-[#f8f8f2]">
-        <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-3 px-5 py-4 md:px-10">
+      <header className="sticky top-0 z-40 border-b border-stone-200/80 bg-[#fafaf9]/90 backdrop-blur-2xl">
+        <div className="mx-auto flex max-w-[88rem] flex-wrap items-center justify-between gap-3 px-5 py-3 md:px-8">
           <div>
             <a href="/" className="inline-block">
               <img
@@ -234,7 +245,7 @@ export function AdminPage() {
                 className="h-11 w-auto"
               />
             </a>
-            <p className="mt-1 text-xs font-semibold tracking-[.15em] text-[#855517] uppercase">
+            <p className="mt-1 text-xs font-semibold tracking-[.15em] text-amber-700 uppercase">
               Farm management
             </p>
           </div>
@@ -243,7 +254,7 @@ export function AdminPage() {
               {data?.staff.email ??
                 (loadError ? "โหลดข้อมูลไม่ได้" : "กำลังตรวจสิทธิ์...")}
             </p>
-            <p className="text-[#607367]">
+            <p className="text-stone-500">
               {data
                 ? data.staff.role === "owner"
                   ? "เจ้าของฟาร์ม"
@@ -256,13 +267,15 @@ export function AdminPage() {
       <main
         id="main-content"
         tabIndex={-1}
-        className="mx-auto max-w-[1440px] px-5 py-10 md:px-10 md:py-14"
+        className="mx-auto max-w-[88rem] px-5 py-10 md:px-8 md:py-14"
       >
-        <p className="public-eyebrow text-[#855517]">MetaFarm / Dashboard</p>
-        <h1 className="mt-3 text-4xl font-semibold tracking-tight md:text-5xl">
+        <p className="inline-flex rounded-full bg-amber-100 px-4 py-1.5 text-sm font-bold text-amber-900">
+          MetaFarm / Dashboard
+        </p>
+        <h1 className="mt-5 text-4xl font-black tracking-tight md:text-5xl">
           ภาพรวมฟาร์ม
         </h1>
-        <p className="mt-3 text-[#607367]">
+        <p className="mt-3 text-stone-600">
           ข้อมูลหลังบ้านสำหรับเจ้าของฟาร์มและทีมงาน
         </p>
         {notice && (
@@ -320,25 +333,28 @@ export function AdminPage() {
               </Card>
             </div>
             <nav
-              className="mt-10 flex flex-wrap gap-2 border-b border-[#dcded3] pb-4"
+              className="mt-10 flex w-fit max-w-full flex-wrap gap-1 rounded-[1.5rem] border border-stone-200 bg-white/90 p-1 shadow-lg shadow-stone-200/40"
               aria-label="ส่วนจัดการ"
             >
               {(
                 [
-                  { id: "hives", label: "รังชันโรง" },
+                  { id: "hives", label: "รังผึ้ง" },
                   { id: "harvests", label: "ผลผลิต" },
                   { id: "inspections", label: "การตรวจและรูป" },
                   ...(data.staff.role === "owner"
-                    ? [{ id: "team", label: "ทีมงาน" }]
+                    ? [{ id: "team", label: "สมาชิก" }]
                     : []),
                 ] as { id: Section; label: string }[]
               ).map((item) => (
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => setSection(item.id)}
+                  onClick={() => {
+                    setSection(item.id);
+                    window.history.replaceState(null, "", `#${item.id}`);
+                  }}
                   aria-pressed={section === item.id}
-                  className={`min-h-11 rounded-full px-5 py-2.5 text-sm font-semibold transition-colors ${section === item.id ? "bg-[#173e30] text-white" : "bg-[#e9eee7] text-[#315242] hover:bg-[#dce8da]"}`}
+                  className={`min-h-11 rounded-full px-5 py-2.5 text-sm font-bold transition-colors ${section === item.id ? "bg-stone-900 text-white shadow-md" : "text-stone-500 hover:bg-stone-100 hover:text-stone-800"}`}
                 >
                   {item.label}
                 </button>

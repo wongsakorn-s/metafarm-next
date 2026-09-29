@@ -1,9 +1,10 @@
 @import "tailwindcss";
 
 :root {
-  font-family: "Noto Sans Thai", "Segoe UI", sans-serif;
-  color: #173e30;
-  background: #f8f8f2;
+  font-family:
+    "Noto Sans Thai Looped", "Noto Sans Thai", "Segoe UI", sans-serif;
+  color: #1c1917;
+  background: #fafaf9;
 }
 body {
   margin: 0;
@@ -21,26 +22,26 @@ textarea {
   display: block;
   width: 100%;
   margin-top: 0.4rem;
-  border: 1px solid #cbd5d1;
-  border-radius: 0.7rem;
+  border: 1px solid #d6d3d1;
+  border-radius: 0.875rem;
   padding: 0.65rem 0.75rem;
   background: white;
 }
 .input:focus {
-  outline: 2px solid #4f947b;
+  outline: 2px solid #f59e0b;
   outline-offset: 1px;
 }
 .primary {
   width: 100%;
-  border-radius: 0.7rem;
-  background: #123d32;
+  border-radius: 0.875rem;
+  background: #f59e0b;
   padding: 0.7rem 1rem;
   color: white;
   font-weight: 700;
   cursor: pointer;
 }
 .primary:hover {
-  background: #1f604f;
+  background: #d97706;
 }
 .primary:disabled {
   opacity: 0.45;
@@ -162,7 +163,7 @@ textarea {
   left: 0.75rem;
   transform: translateY(-150%);
   border-radius: 0.35rem;
-  background: #173e30;
+  background: #292524;
   padding: 0.75rem 1rem;
   color: white;
   font-weight: 700;
@@ -196,25 +197,25 @@ textarea {
 }
 
 .admin-shell .rounded-2xl.bg-white {
-  border: 1px solid #dfe5db;
-  border-radius: 0;
-  box-shadow: 0 12px 35px #173e300a;
+  border: 1px solid #e7e5e4;
+  border-radius: 1.5rem;
+  box-shadow: 0 20px 45px -30px #44403c59;
 }
 .admin-shell .input {
-  border-color: #ccd8cb;
-  border-radius: 0.45rem;
+  border-color: #d6d3d1;
+  border-radius: 0.875rem;
   padding: 0.75rem 0.85rem;
 }
 .admin-shell .input:focus {
-  outline-color: #b7803d;
+  outline-color: #f59e0b;
 }
 .admin-shell .primary {
-  border-radius: 0.45rem;
-  background: #173e30;
+  border-radius: 0.875rem;
+  background: #f59e0b;
   padding-block: 0.8rem;
 }
 .admin-shell .primary:hover {
-  background: #275b43;
+  background: #d97706;
 }
 .admin-shell summary {
   list-style-position: inside;

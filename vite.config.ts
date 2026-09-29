@@ -14,8 +14,8 @@ export default defineConfig({
         short_name: "MetaFarm",
         description: "เว็บฟาร์มและระบบจัดการรังชันโรง",
         lang: "th",
-        theme_color: "#173e30",
-        background_color: "#f8f8f2",
+        theme_color: "#f59e0b",
+        background_color: "#fafaf9",
         display: "standalone",
         start_url: "/",
         icons: [
