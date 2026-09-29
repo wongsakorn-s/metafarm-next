@@ -11,11 +11,13 @@ export function HarvestForm({
   hives,
   today,
   busy,
+  defaultHiveId,
   onSubmit,
 }: {
   hives: Hive[];
   today: string;
   busy: boolean;
+  defaultHiveId?: string;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   return (
@@ -24,7 +26,12 @@ export function HarvestForm({
         <h2 className="text-lg font-bold">{th.admin.addHarvest}</h2>
         <Field label={th.admin.hive} required>
           {(id) => (
-            <Select id={id} required name="hiveId">
+            <Select
+              id={id}
+              required
+              name="hiveId"
+              defaultValue={defaultHiveId ?? ""}
+            >
               <option value="">{th.admin.selectHive}</option>
               {hives.map((hive) => (
                 <option key={hive.id} value={hive.id}>

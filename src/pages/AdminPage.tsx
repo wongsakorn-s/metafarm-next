@@ -9,19 +9,36 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { Skeleton } from "../components/ui/Skeleton";
 import { Toast, type ToastMessage } from "../components/ui/Toast";
 import { DashboardSummary } from "../features/dashboard/DashboardSummary";
+import { BackupPanel } from "../features/backup/BackupPanel";
 import { HiveForm } from "../features/hives/HiveForm";
 import { HiveList } from "../features/hives/HiveList";
+import { HiveDetail } from "../features/hives/HiveDetail";
 import { HarvestForm } from "../features/harvests/HarvestForm";
 import { HarvestList } from "../features/harvests/HarvestList";
 import { InspectionForm } from "../features/inspections/InspectionForm";
 import { InspectionList } from "../features/inspections/InspectionList";
 import { TeamForm } from "../features/team/TeamForm";
 import { TeamList } from "../features/team/TeamList";
+import { QRStation } from "../features/qr/QRStation";
 import { th } from "../i18n/th";
-import { api, type Dashboard, type Hive, type Inspection } from "../lib/api";
+import {
+  api,
+  type Dashboard,
+  type Harvest,
+  type Hive,
+  type Inspection,
+} from "../lib/api";
 import { farmDate } from "../lib/date";
+import { prepareImage } from "../lib/image";
+import { useHistory } from "../lib/useHistory";
 
-const sections: AdminSection[] = ["hives", "harvests", "inspections", "team"];
+const sections: AdminSection[] = [
+  "hives",
+  "harvests",
+  "inspections",
+  "qr",
+  "team",
+];
 
 function initialSection(): AdminSection {
   const hash = window.location.hash.slice(1);
@@ -30,25 +47,34 @@ function initialSection(): AdminSection {
     : "hives";
 }
 
-function validatedImage(value: FormDataEntryValue | null): File | null {
+async function validatedImage(value: FormDataEntryValue | null): Promise<File | null> {
   if (!(value instanceof File) || value.size === 0) return null;
-  if (
-    value.size > 2_000_000 ||
-    !["image/jpeg", "image/png", "image/webp"].includes(value.type)
-  ) {
-    throw new Error(th.admin.photoInvalid);
-  }
-  return value;
+  return prepareImage(value);
 }
 
 export function AdminPage() {
   const today = farmDate();
+  const detailHiveId = /^\/admin\/hives\/([0-9a-f-]{36})\/?$/.exec(
+    window.location.pathname,
+  )?.[1];
+  const defaultHiveId =
+    new URLSearchParams(window.location.search).get("hive") ?? undefined;
   const [data, setData] = useState<Dashboard | null>(null);
   const [section, setSection] = useState<AdminSection>(initialSection);
   const [notice, setNotice] = useState<ToastMessage | null>(null);
   const [loadError, setLoadError] = useState("");
   const [busy, setBusy] = useState(false);
   const [savedVersion, setSavedVersion] = useState(0);
+  const harvestHistory = useHistory<Harvest>(
+    "harvests",
+    data?.harvests,
+    data?.summary.harvestCount,
+  );
+  const inspectionHistory = useHistory<Inspection>(
+    "inspections",
+    data?.inspections,
+    data?.summary.inspectionCount,
+  );
   const closeNotice = useCallback(() => setNotice(null), []);
 
   useEffect(() => {
@@ -58,7 +84,8 @@ export function AdminPage() {
       ?.setAttribute("content", th.admin.description);
   }, []);
   const refresh = useCallback(async () => {
-    setData(await api<Dashboard>("/dashboard"));
+    const result = await api<Dashboard>(`/dashboard?month=${farmDate().slice(0, 7)}`);
+    setData(result);
     setLoadError("");
   }, []);
   useEffect(() => {
@@ -70,6 +97,10 @@ export function AdminPage() {
   }, [data, section]);
 
   function changeSection(value: AdminSection) {
+    if (detailHiveId) {
+      window.location.assign(`/admin#${value}`);
+      return;
+    }
     setSection(value);
     window.history.replaceState(null, "", `#${value}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -145,8 +176,9 @@ export function AdminPage() {
     const form = event.currentTarget;
     await submit(event, async () => {
       const values = Object.fromEntries(new FormData(form));
-      const image = validatedImage(values.image ?? null);
+      const image = await validatedImage(values.image ?? null);
       delete values.image;
+      if (!values.status) delete values.status;
       const record = await api<Inspection>("/inspections", {
         method: "POST",
         body: JSON.stringify(values),
@@ -172,7 +204,7 @@ export function AdminPage() {
   ) {
     const form = event.currentTarget;
     await submit(event, async () => {
-      const image = validatedImage(new FormData(form).get("image"));
+      const image = await validatedImage(new FormData(form).get("image"));
       if (!image) throw new Error(th.admin.photoRequired);
       await api(`/inspections/${inspectionId}/photo`, {
         method: "PUT",
@@ -244,27 +276,32 @@ export function AdminPage() {
         )
       ) : (
         <div className="flex flex-col gap-6">
-          <div
-            className={`${section === "hives" ? "order-2" : "hidden"} lg:order-1 lg:block`}
-          >
-            <DashboardSummary data={data} today={today} />
-          </div>
+          {!detailHiveId && (
+            <div
+              className={`${section === "hives" ? "order-2" : "hidden"} lg:order-1 lg:block print:hidden`}
+            >
+              <DashboardSummary data={data} />
+            </div>
+          )}
           <div className="order-1 lg:order-2">
-            {section === "hives" && (
-              <FeaturePanel
-                title={th.admin.addHive}
-                actionLabel={th.admin.addHive}
-                savedVersion={savedVersion}
-                form={<HiveForm busy={busy} onSubmit={createHive} />}
-                list={
-                  <HiveList
-                    hives={data.hives}
-                    busy={busy}
-                    onUpdate={updateHive}
-                  />
-                }
-              />
-            )}
+            {section === "hives" &&
+              (detailHiveId ? (
+                <HiveDetail hiveId={detailHiveId} />
+              ) : (
+                <FeaturePanel
+                  title={th.admin.addHive}
+                  actionLabel={th.admin.addHive}
+                  savedVersion={savedVersion}
+                  form={<HiveForm busy={busy} onSubmit={createHive} />}
+                  list={
+                    <HiveList
+                      hives={data.hives}
+                      busy={busy}
+                      onUpdate={updateHive}
+                    />
+                  }
+                />
+              ))}
             {section === "harvests" && (
               <FeaturePanel
                 title={th.admin.addHarvest}
@@ -273,13 +310,18 @@ export function AdminPage() {
                 form={
                   <HarvestForm
                     hives={data.hives}
+                    defaultHiveId={defaultHiveId}
                     today={today}
                     busy={busy}
                     onSubmit={createHarvest}
                   />
                 }
                 list={
-                  <HarvestList harvests={data.harvests} hiveName={hiveName} />
+                  <HarvestList
+                    history={harvestHistory}
+                    hiveName={hiveName}
+                    resetToken={savedVersion}
+                  />
                 }
               />
             )}
@@ -291,6 +333,7 @@ export function AdminPage() {
                 form={
                   <InspectionForm
                     hives={data.hives}
+                    defaultHiveId={defaultHiveId}
                     today={today}
                     busy={busy}
                     onSubmit={createInspection}
@@ -298,7 +341,7 @@ export function AdminPage() {
                 }
                 list={
                   <InspectionList
-                    inspections={data.inspections}
+                    history={inspectionHistory}
                     hiveName={hiveName}
                     busy={busy}
                     onUpload={uploadInspectionPhoto}
@@ -314,14 +357,18 @@ export function AdminPage() {
                 savedVersion={savedVersion}
                 form={<TeamForm busy={busy} onSubmit={createTeam} />}
                 list={
-                  <TeamList
-                    team={data.team}
-                    busy={busy}
-                    onToggle={toggleTeam}
-                  />
+                  <div className="space-y-6">
+                    <TeamList
+                      team={data.team}
+                      busy={busy}
+                      onToggle={toggleTeam}
+                    />
+                    <BackupPanel />
+                  </div>
                 }
               />
             )}
+            {section === "qr" && <QRStation hives={data.hives} />}
           </div>
         </div>
       )}

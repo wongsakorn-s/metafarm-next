@@ -1,5 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { getStaff, type AppEnv } from './auth';
+
+const database = vi.hoisted(() => ({ rows: [] as Array<{ active: boolean }> }));
+vi.mock('./db', () => ({
+  getDb: () => ({
+    select: () => ({
+      from: () => ({
+        where: () => ({ limit: async () => database.rows })
+      })
+    })
+  })
+}));
 
 const localRequest = new Request('http://127.0.0.1:8787/api/me');
 const env = {
@@ -19,5 +30,19 @@ describe('admin authorization', () => {
 
   it('does not bypass Access on a public hostname', async () => {
     expect(await getStaff(new Request('https://metafarm.example/api/me'), env)).toBeNull();
+  });
+
+  it('allows only active staff in local development', async () => {
+    const staffEnv = { ...env, DEV_AUTH_EMAIL: 'Staff@Example.com' };
+    database.rows = [{ active: true }];
+    expect(await getStaff(localRequest, staffEnv)).toEqual({
+      email: 'staff@example.com',
+      role: 'staff'
+    });
+
+    database.rows = [{ active: false }];
+    expect(await getStaff(localRequest, staffEnv)).toBeNull();
+    database.rows = [];
+    expect(await getStaff(localRequest, staffEnv)).toBeNull();
   });
 });

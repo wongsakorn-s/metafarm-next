@@ -1,27 +1,31 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
+import { DateRangeFilter } from "../../components/ui/DateRangeFilter";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { LoadMore } from "../../components/ui/LoadMore";
 import { Sheet } from "../../components/ui/Sheet";
 import { StatusBadge } from "../hives/StatusBadge";
 import { th } from "../../i18n/th";
 import type { Inspection } from "../../lib/api";
+import type { HistoryView } from "../../lib/useHistory";
 import { formatFarmDate } from "../../lib/date";
 import { PhotoUpload } from "./PhotoUpload";
 
 export function InspectionList({
-  inspections,
+  history,
   hiveName,
   busy,
   onUpload,
   savedVersion,
 }: {
-  inspections: Inspection[];
+  history: HistoryView<Inspection>;
   hiveName: (id: string) => string;
   busy: boolean;
   onUpload: (event: FormEvent<HTMLFormElement>, id: string) => void;
   savedVersion: number;
 }) {
+  const inspections = history.items;
   const [photoRecordId, setPhotoRecordId] = useState<string | null>(null);
   const previousVersion = useRef(savedVersion);
   useEffect(() => {
@@ -29,16 +33,23 @@ export function InspectionList({
     previousVersion.current = savedVersion;
   }, [savedVersion]);
   const photoRecord = inspections.find((record) => record.id === photoRecordId);
-  if (!inspections.length)
-    return (
-      <EmptyState
-        title={th.common.noData}
-        description={th.admin.firstInspection}
-      />
-    );
   return (
     <div className="space-y-3">
       <h2 className="text-lg font-bold">{th.admin.latest}</h2>
+      <DateRangeFilter
+        range={history.range}
+        loading={history.loading}
+        error={history.errorSource === "filter" ? history.error : ""}
+        resetToken={savedVersion}
+        onApply={history.applyFilter}
+        onClear={history.clearFilter}
+      />
+      {!inspections.length && (
+        <EmptyState
+          title={th.common.noData}
+          description={history.range ? th.admin.noHistoryMatch : th.admin.firstInspection}
+        />
+      )}
       {inspections.map((record) => (
         <Card key={record.id}>
           <div className="flex flex-wrap items-start justify-between gap-2">
@@ -75,6 +86,12 @@ export function InspectionList({
           </div>
         </Card>
       ))}
+      <LoadMore
+        hasMore={history.hasMore}
+        loading={history.loading}
+        error={history.errorSource === "more" ? history.error : ""}
+        onClick={history.loadMore}
+      />
       <Sheet
         open={Boolean(photoRecord)}
         onClose={() => setPhotoRecordId(null)}

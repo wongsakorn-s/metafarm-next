@@ -4,6 +4,6 @@ export function legacyAdminDestination(pathname: string): string | null {
   if (path === "/login" || path === "/dashboard") return "/admin";
   if (path === "/hives" || /^\/hives\/[^/]+$/.test(path)) return "/admin#hives";
   if (path === "/users") return "/admin#team";
-  if (path === "/print-qr") return "/admin#hives";
+  if (path === "/print-qr") return "/admin#qr";
   return null;
 }
