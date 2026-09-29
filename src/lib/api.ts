@@ -1,3 +1,5 @@
+import { th } from "../i18n/th";
+
 export type Staff = { email: string; role: "owner" | "staff" };
 export type Hive = {
   id: string;
@@ -70,22 +72,38 @@ export type Weather = {
 };
 
 export async function api<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`/api${path}`, {
-    ...options,
-    headers: {
-      ...(options?.body && !(options.body instanceof Blob)
-        ? { "Content-Type": "application/json" }
-        : {}),
-      ...options?.headers,
-    },
-    credentials: "same-origin",
-    cache: "no-store",
-  });
-  if (!response.ok) {
-    const result = (await response.json().catch(() => null)) as {
-      error?: string;
-    } | null;
-    throw new Error(result?.error ?? `HTTP ${response.status}`);
+  let response: Response;
+  try {
+    response = await fetch(`/api${path}`, {
+      ...options,
+      headers: {
+        ...(options?.body && !(options.body instanceof Blob)
+          ? { "Content-Type": "application/json" }
+          : {}),
+        ...options?.headers,
+      },
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+  } catch {
+    throw new Error(th.common.networkError);
   }
-  return response.json() as Promise<T>;
+  if (response.status === 401) throw new Error(th.common.sessionExpired);
+  if (response.status === 403) throw new Error(th.common.accessDenied);
+  if (!response.headers.get("content-type")?.includes("application/json"))
+    throw new Error(th.common.sessionExpired);
+  let result: unknown;
+  try {
+    result = await response.json();
+  } catch {
+    throw new Error(th.common.invalidResponse);
+  }
+  if (!response.ok) {
+    const error =
+      result && typeof result === "object" && "error" in result
+        ? result.error
+        : null;
+    throw new Error(typeof error === "string" ? error : th.common.invalidResponse);
+  }
+  return result as T;
 }

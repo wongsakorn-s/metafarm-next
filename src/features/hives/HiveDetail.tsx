@@ -83,6 +83,14 @@ export function HiveDetail({ hiveId }: { hiveId: string }) {
           {hive.location || "—"}
         </p>
       </Card>
+      <div className="flex flex-wrap gap-3">
+        <ButtonLink href={`/admin${hiveQuery}#harvests`}>
+          {th.admin.addHarvest}
+        </ButtonLink>
+        <ButtonLink href={`/admin${hiveQuery}#inspections`} variant="secondary">
+          {th.admin.addInspection}
+        </ButtonLink>
+      </div>
       <div className="grid gap-3 sm:grid-cols-3">
         <Card>
           <p className="text-sm text-stone-600">
@@ -107,27 +115,19 @@ export function HiveDetail({ hiveId }: { hiveId: string }) {
           </p>
         </Card>
       </div>
-      <div className="flex flex-wrap gap-3">
-        <ButtonLink href={`/admin${hiveQuery}#harvests`}>
-          {th.admin.addHarvest}
-        </ButtonLink>
-        <ButtonLink href={`/admin${hiveQuery}#inspections`} variant="secondary">
-          {th.admin.addInspection}
-        </ButtonLink>
-      </div>
       <div className="grid gap-6 xl:grid-cols-2">
         <section aria-label={th.admin.inspections}>
           <h2 className="mb-3 text-lg font-bold">
             {th.admin.inspections} ({formatFarmNumber(totals.inspectionCount)})
           </h2>
-          <DateRangeFilter
+          {(totals.inspectionCount > 0 || inspectionHistory.range) && <DateRangeFilter
             range={inspectionHistory.range}
             loading={inspectionHistory.loading}
             error={inspectionHistory.errorSource === "filter" ? inspectionHistory.error : ""}
             resetToken={hiveId}
             onApply={inspectionHistory.applyFilter}
             onClear={inspectionHistory.clearFilter}
-          />
+          />}
           <div className="space-y-3">
             {inspections.length ? (
               inspections.map((record) => (
@@ -173,14 +173,14 @@ export function HiveDetail({ hiveId }: { hiveId: string }) {
           <h2 className="mb-3 text-lg font-bold">
             {th.admin.harvests} ({formatFarmNumber(totals.harvestCount)})
           </h2>
-          <DateRangeFilter
+          {(totals.harvestCount > 0 || harvestHistory.range) && <DateRangeFilter
             range={harvestHistory.range}
             loading={harvestHistory.loading}
             error={harvestHistory.errorSource === "filter" ? harvestHistory.error : ""}
             resetToken={hiveId}
             onApply={harvestHistory.applyFilter}
             onClear={harvestHistory.clearFilter}
-          />
+          />}
           <div className="space-y-3">
             {harvests.length ? (
               harvests.map((record) => (

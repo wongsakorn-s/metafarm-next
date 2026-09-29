@@ -1,3 +1,5 @@
+import { th } from "../i18n/th";
+
 const MAX_SOURCE_BYTES = 10_000_000;
 const MAX_UPLOAD_BYTES = 2_000_000;
 const MAX_DIMENSION = 1200;
@@ -6,7 +8,7 @@ const SUPPORTED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 function canvasBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
-      (blob) => (blob ? resolve(blob) : reject(new Error("ไม่สามารถแปลงรูปได้"))),
+      (blob) => (blob ? resolve(blob) : reject(new Error(th.common.imageConvertFailed))),
       "image/jpeg",
       quality,
     );
@@ -48,24 +50,24 @@ async function decodeImage(file: File): Promise<{
 
 export async function prepareImage(file: File): Promise<File> {
   if (!SUPPORTED_TYPES.includes(file.type) || file.size === 0) {
-    throw new Error("รูปต้องเป็น JPEG, PNG หรือ WebP");
+    throw new Error(th.common.imageTypeInvalid);
   }
   if (file.size > MAX_SOURCE_BYTES) {
-    throw new Error("รูปต้นฉบับต้องไม่เกิน 10 MB");
+    throw new Error(th.common.imageSourceTooLarge);
   }
 
   let decoded: Awaited<ReturnType<typeof decodeImage>>;
   try {
     decoded = await decodeImage(file);
   } catch {
-    throw new Error("เปิดไฟล์รูปไม่สำเร็จ กรุณาเลือกรูปใหม่");
+    throw new Error(th.common.imageOpenFailed);
   }
 
   try {
-    if (!decoded.width || !decoded.height) throw new Error("รูปไม่ถูกต้อง");
+    if (!decoded.width || !decoded.height) throw new Error(th.common.imageInvalid);
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d");
-    if (!context) throw new Error("อุปกรณ์นี้ไม่รองรับการย่อรูป");
+    if (!context) throw new Error(th.common.imageResizeUnsupported);
 
     for (const maxDimension of [MAX_DIMENSION, 1000, 800, 600]) {
       const scale = Math.min(1, maxDimension / Math.max(decoded.width, decoded.height));
@@ -84,7 +86,7 @@ export async function prepareImage(file: File): Promise<File> {
         }
       }
     }
-    throw new Error("รูปยังมีขนาดใหญ่เกิน 2 MB กรุณาเลือกรูปอื่น");
+    throw new Error(th.common.imageUploadTooLarge);
   } finally {
     decoded.dispose();
   }

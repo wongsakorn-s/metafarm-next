@@ -14,7 +14,7 @@ export function HiveList({
 }: {
   hives: Hive[];
   busy: boolean;
-  onUpdate: (event: FormEvent<HTMLFormElement>, hive: Hive) => void;
+  onUpdate: (event: FormEvent<HTMLFormElement>, hive: Hive) => Promise<boolean>;
 }) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");

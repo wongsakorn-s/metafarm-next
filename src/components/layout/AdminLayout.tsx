@@ -106,7 +106,7 @@ export function AdminLayout({
           </nav>
         )}
         <div className="mt-auto border-t border-stone-200 px-3 pt-4">
-          <p className="break-all text-sm font-semibold">
+          <p className="truncate text-sm font-semibold" title={email}>
             {email ?? th.admin.checkingAccess}
           </p>
           <p className="text-xs text-stone-600">{roleLabel}</p>
@@ -126,7 +126,7 @@ export function AdminLayout({
               />
             </a>
             <div className="min-w-0 text-right">
-              <p className="truncate text-xs font-semibold text-stone-800">
+              <p className="truncate text-xs font-semibold text-stone-800" title={email}>
                 {email ?? th.admin.checkingAccess}
               </p>
               <p className="text-xs text-stone-600">{roleLabel}</p>

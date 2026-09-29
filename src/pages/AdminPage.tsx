@@ -111,9 +111,10 @@ export function AdminPage() {
     event: FormEvent<HTMLFormElement>,
     action: () => Promise<unknown>,
     resetAfter = true,
-  ) {
+  ): Promise<boolean> {
     event.preventDefault();
     const form = event.currentTarget;
+    const submitter = (event.nativeEvent as SubmitEvent).submitter;
     setBusy(true);
     setNotice(null);
     try {
@@ -122,14 +123,20 @@ export function AdminPage() {
       setNotice({ message: th.admin.saved, kind: "success" });
       setSavedVersion((version) => version + 1);
       if (resetAfter) form.reset();
+      return true;
     } catch (cause) {
       await refresh().catch(() => undefined);
       setNotice({
         message: cause instanceof Error ? cause.message : th.admin.saveFailed,
         kind: "error",
       });
+      return false;
     } finally {
       setBusy(false);
+      requestAnimationFrame(() => {
+        if (submitter instanceof HTMLElement && submitter.isConnected)
+          submitter.focus();
+      });
     }
   }
 
@@ -147,9 +154,9 @@ export function AdminPage() {
       }),
     );
   }
-  async function updateHive(event: FormEvent<HTMLFormElement>, hive: Hive) {
+  async function updateHive(event: FormEvent<HTMLFormElement>, hive: Hive): Promise<boolean> {
     const form = event.currentTarget;
-    await submit(
+    return submit(
       event,
       () =>
         api(`/hives/${hive.id}`, {

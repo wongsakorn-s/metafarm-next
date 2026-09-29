@@ -14,7 +14,7 @@ export function HiveCard({
 }: {
   hive: Hive;
   busy: boolean;
-  onUpdate: (event: FormEvent<HTMLFormElement>, hive: Hive) => void;
+  onUpdate: (event: FormEvent<HTMLFormElement>, hive: Hive) => Promise<boolean>;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -48,7 +48,9 @@ export function HiveCard({
         <HiveForm
           hive={hive}
           busy={busy}
-          onSubmit={(event) => onUpdate(event, hive)}
+          onSubmit={async (event) => {
+            if (await onUpdate(event, hive)) setOpen(false);
+          }}
         />
       </Sheet>
     </>
