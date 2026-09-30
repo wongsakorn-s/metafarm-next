@@ -84,6 +84,15 @@ async function assertStaffCanChangeHiveRecords(actor: StaffSession, hiveId: stri
     throw new HttpError(409, "รังนี้ถูกเก็บถาวรแล้ว เฉพาะเจ้าของเท่านั้นที่แก้ไขบันทึกของรังนี้ได้");
 }
 
+/** A retried create must not resurrect a record that was deleted after the first attempt. */
+async function activeReplay(table: "harvests" | "inspections", response: unknown) {
+  const id = z.object({ id: z.uuid() }).parse(response).id;
+  const result = await database().execute(sql`
+    SELECT 1 FROM ${sql.identifier(table)} WHERE id = ${id}::uuid AND deleted_at IS NULL`);
+  if (!result.rows.length) throw new HttpError(409, "รายการนี้ถูกบันทึกไว้แล้วแต่ถูกลบไปภายหลัง");
+  return response;
+}
+
 /** Archived hives are visible to the owner only. */
 function activeHiveFor(actor: StaffSession) {
   return actor.role === "owner" ? undefined : isNull(hives.archivedAt);
@@ -539,7 +548,7 @@ app.post("/api/harvests", async (req, res) => {
   const db = database();
   const actor = session(res);
   const replay = await prepareIdempotency(req, db, actor.email, "create-harvest", input);
-  if (replay.previousResponse) return void res.status(201).json(replay.previousResponse);
+  if (replay.previousResponse) return void res.status(201).json(await activeReplay("harvests", replay.previousResponse));
   await assertHive(input.hiveId);
   const id = crypto.randomUUID();
   const result = await db.execute(sql`
@@ -580,7 +589,7 @@ app.post("/api/harvests", async (req, res) => {
   `);
   if (result.rows[0]) return void res.status(201).json(result.rows[0].response);
   await assertHive(input.hiveId);
-  res.status(201).json(await replayAfterConflict(db, replay));
+  res.status(201).json(await activeReplay("harvests", await replayAfterConflict(db, replay)));
 });
 
 app.patch("/api/harvests/:id", async (req, res) => {
@@ -634,7 +643,7 @@ app.post("/api/inspections", async (req, res) => {
   const db = database();
   const actor = session(res);
   const replay = await prepareIdempotency(req, db, actor.email, "create-inspection", input);
-  if (replay.previousResponse) return void res.status(201).json(replay.previousResponse);
+  if (replay.previousResponse) return void res.status(201).json(await activeReplay("inspections", replay.previousResponse));
   await assertHive(input.hiveId);
   const id = crypto.randomUUID();
   const result = await db.execute(sql`
@@ -686,7 +695,7 @@ app.post("/api/inspections", async (req, res) => {
   `);
   if (result.rows[0]) return void res.status(201).json(result.rows[0].response);
   await assertHive(input.hiveId);
-  res.status(201).json(await replayAfterConflict(db, replay));
+  res.status(201).json(await activeReplay("inspections", await replayAfterConflict(db, replay)));
 });
 
 app.patch("/api/inspections/:id", async (req, res) => {
