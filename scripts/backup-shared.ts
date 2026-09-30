@@ -13,10 +13,18 @@ export const photoSchema = z.object({
   sha256: z.string().regex(/^[0-9a-f]{64}$/),
 });
 
+export const missingPhotoSchema = z.object({
+  inspectionId: z.uuid(),
+  key: photoSchema.shape.key,
+});
+
 const row = z.record(z.string(), z.unknown());
 export const exportSchema = z.object({
   formatVersion: z.literal(1),
   exportedAt: z.iso.datetime(),
+  fullBackup: z.boolean().optional(),
+  mediaBucket: z.string().nullable().optional(),
+  missingPhotos: z.array(missingPhotoSchema).default([]),
   hives: z.array(row),
   harvests: z.array(row),
   inspections: z.array(row),
@@ -38,6 +46,7 @@ export const manifestSchema = z.object({
     photos: z.number().int().nonnegative(),
   }),
   photos: z.array(photoSchema),
+  missingPhotos: z.array(missingPhotoSchema).default([]),
 });
 
 export function sha256(bytes: Uint8Array): string {
@@ -60,6 +69,9 @@ export async function verifyBackupFolder(root: string) {
     if (records[table].length !== manifest.counts[table]) throw new Error(`จำนวน ${table} ไม่ตรงกับ manifest`);
   }
   if (JSON.stringify(records.photos) !== JSON.stringify(manifest.photos)) throw new Error("รายการรูปไม่ตรงกับ manifest");
+  if (JSON.stringify(records.missingPhotos) !== JSON.stringify(manifest.missingPhotos)) {
+    throw new Error("รายการรูปที่หายไม่ตรงกับ manifest");
+  }
   const imageRecords = new Map(records.inspections.map((record) => [record.id, record.imageKey]));
   const listedPhotos = new Set<string>();
   for (const photo of manifest.photos) {
@@ -72,8 +84,12 @@ export async function verifyBackupFolder(root: string) {
       throw new Error(`checksum รูปไม่ตรง: ${photo.inspectionId}`);
     }
   }
+  // Photos that were already missing when the backup ran are recorded, so they do not block a restore.
+  const knownMissing = new Set(manifest.missingPhotos.map((photo) => photo.key));
   for (const key of imageRecords.values()) {
-    if (key && !listedPhotos.has(String(key))) throw new Error("บันทึกตรวจอ้างอิงรูปที่ไม่มีใน manifest");
+    if (key && !listedPhotos.has(String(key)) && !knownMissing.has(String(key))) {
+      throw new Error("บันทึกตรวจอ้างอิงรูปที่ไม่มีใน manifest");
+    }
   }
   return { records, manifest };
 }

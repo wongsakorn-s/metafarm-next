@@ -1,5 +1,6 @@
 OWNER_EMAIL=owner@example.com
 DEV_AUTH_EMAIL=owner@example.com
+ENVIRONMENT=development
 DATABASE_URL=postgresql://user:password@ep-twilight-pine-b3svkey5-pooler.c-4.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
 OPENWEATHER_API_KEY=
 R2_BUCKET_NAME=metafarm-next-media-dev

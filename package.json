@@ -6,6 +6,7 @@
   "scripts": {
     "dev:web": "vite --host 127.0.0.1",
     "dev:api": "bun --env-file=.dev.vars scripts/verify-development-db.ts && wrangler dev --port 8787",
+    "dev:api:r2": "bun --env-file=.dev.vars scripts/verify-development-db.ts && wrangler dev --env development --port 8787",
     "build": "bun scripts/build-images.ts && vite build && bun scripts/prerender-public.tsx",
     "preview": "bun --env-file=.dev.vars scripts/verify-development-db.ts && wrangler dev --port 4173",
     "check": "tsc --noEmit",
@@ -18,7 +19,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:migrate:local": "bun --env-file=.dev.vars scripts/verify-development-db.ts && bun --env-file=.dev.vars run db:migrate",
-    "deploy": "bun run check && bun run test && bun run build && wrangler deploy"
+    "deploy": "echo \"Deploy ผ่าน GitHub Actions (Deploy staging / Deploy production) เท่านั้น เพื่อให้ผ่านตัวตรวจเป้าหมายและ migration\" && exit 1"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

@@ -10,6 +10,8 @@ export type AppEnv = Env & {
   ACCESS_TEAM_DOMAIN?: string;
   ACCESS_AUD?: string;
   DEV_AUTH_EMAIL?: string;
+  ENVIRONMENT?: string;
+  MEDIA_BUCKET?: string;
   OPENWEATHER_API_KEY?: string;
   FARM_LAT?: string;
   FARM_LON?: string;
@@ -23,12 +25,22 @@ export async function getStaff(request: Request, bindings: AppEnv): Promise<Staf
 
   let email: string | undefined;
   const hostname = new URL(request.url).hostname;
-  if (!bindings.ACCESS_AUD && (hostname === '127.0.0.1' || hostname === 'localhost') && bindings.DEV_AUTH_EMAIL) {
+  if (
+    bindings.ENVIRONMENT === 'development' &&
+    !bindings.ACCESS_AUD &&
+    (hostname === '127.0.0.1' || hostname === 'localhost') &&
+    bindings.DEV_AUTH_EMAIL
+  ) {
     email = bindings.DEV_AUTH_EMAIL;
   } else {
     const token = request.headers.get('Cf-Access-Jwt-Assertion');
     if (!token || !bindings.ACCESS_TEAM_DOMAIN || !bindings.ACCESS_AUD) return null;
-    const teamDomain = new URL(bindings.ACCESS_TEAM_DOMAIN).origin;
+    let teamDomain: string;
+    try {
+      teamDomain = new URL(bindings.ACCESS_TEAM_DOMAIN).origin;
+    } catch {
+      return null;
+    }
     let keys = keySets.get(teamDomain);
     if (!keys) {
       keys = createRemoteJWKSet(new URL('/cdn-cgi/access/certs', teamDomain));

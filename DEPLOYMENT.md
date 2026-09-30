@@ -91,7 +91,7 @@ Workflow `Deploy production` มีตัวตรวจเป้าหมาย
 3. เปิด R2 ใน Cloudflare dashboard และสร้าง private bucket: `bunx wrangler r2 bucket create metafarm-next-media` (R2 อาจต้องทำขั้นตอน billing และเกินโควตาแล้วอาจมีค่าใช้จ่าย)
 4. สร้าง Cloudflare Access Self-hosted application แบบ **public hostname/path** ครอบคลุม hostname ของ Worker ทั้งหมดระหว่างเป็น private staging; เมื่อพร้อมเปิดหน้าเว็บให้คนทั่วไป เอา destination ที่ครอบ hostname ทั้งหมดออกและคง `/admin*` กับ `/api/*` ไว้ อย่าเลือก destination แบบ **Workers** สำหรับเว็บสาธารณะ อนุญาตเฉพาะอีเมลเจ้าของ/ทีมด้วย identity provider ที่ต้องการ และจด Application AUD tag
 5. ตั้ง Worker secrets `DATABASE_URL`, `OWNER_EMAIL`, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` โดย `ACCESS_TEAM_DOMAIN` เป็น `https://<team>.cloudflareaccess.com` ห้ามตั้ง `DEV_AUTH_EMAIL` บน production คำสั่ง `wrangler secret put` จะ deploy version ทันที ส่วน `wrangler versions secret put` สร้าง version โดยยังไม่ deploy
-6. ใน GitHub repo → Settings → Secrets and variables → Actions ตั้ง `NEON_DATABASE_URL`, `CLOUDFLARE_API_TOKEN` และ `CLOUDFLARE_ACCOUNT_ID` (token ให้สิทธิ์ Workers edit และ R2 เฉพาะที่จำเป็น)
+6. ใน GitHub repo → Settings → Environments สร้าง environment `staging` และ `production` (จำกัด branch `main` และแนะนำให้เปิด **Required reviewers** ของ `production`) แล้วตั้ง environment secrets `NEON_DATABASE_URL`, `CLOUDFLARE_API_TOKEN` และ `CLOUDFLARE_ACCOUNT_ID` แยกกัน (token ให้สิทธิ์ Workers edit และ R2 เฉพาะที่จำเป็น)
 7. ไป Actions → **Deploy production** → Run workflow จาก `main` ระบบ migrate schema และ deploy เว็บ/API พร้อมกัน
 8. ทดสอบ public `/` โดยไม่ล็อกอิน, `/admin` ผ่าน Access, สร้างรัง/ผลผลิต/บันทึกตรวจ, อัปโหลดรูป, และทดสอบบัญชีที่ไม่มีสิทธิ์ถูกปฏิเสธ
 
@@ -108,13 +108,16 @@ Workflow `Deploy production` มีตัวตรวจเป้าหมาย
 ## สำรองและกู้คืนข้อมูล (development)
 
 - หน้า Admin ของ owner ส่งออก JSON หรือ CSV ZIP ได้ โดยแยกไฟล์รัง ผลผลิต บันทึกตรวจ ทีม ประวัติ audit และ manifest รูป; CSV ใส่ UTF-8 BOM เพื่อเปิดภาษาไทยใน Excel ได้
-- JSON มี `photos` manifest พร้อม inspection ID, R2 key, MIME, ขนาด และ SHA-256; รูปจริงสำรองด้วย script เท่านั้น
+- JSON มี `photos` manifest พร้อม inspection ID, R2 key, MIME, ขนาด และ SHA-256 และ `missingPhotos` สำหรับรูปที่อ้างอิงแต่ไม่พบใน R2; รูปจริงสำรองด้วย script เท่านั้น
+- การส่งออกจากหน้า Admin ไม่รวมรายการที่ลบแล้ว และเมื่อเลือกช่วงวันที่ ประวัติ audit จะถูกกรองตามวันที่บันทึก (เวลาไทย) ด้วย; ส่วน `backup:dev` ใช้ `/api/export?full=true` ซึ่งรวมรายการที่ลบแบบ soft delete และดึง audit ทีละ 1,000 แถวจาก `/api/export/audit` จึงไม่ติดเพดาน 10,000 แถวของ audit
 - แนะนำสำรองทุกวัน และก่อนรัน migration/release ทุกครั้ง เก็บสำเนาอย่างน้อยหนึ่งชุดนอกเครื่องที่รันแอป พร้อมทดสอบ restore เป็นระยะ
 
 ตั้งค่า R2 S3 API token ที่มีสิทธิ์เฉพาะ bucket development ใน `.dev.vars` โดยใช้ keys `CLOUDFLARE_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME=metafarm-next-media-dev`; ห้ามส่ง credentials ในแชตหรือ commit `.dev.vars`
 
 ```powershell
-# ต้องมี local Worker ทำงานที่ 127.0.0.1:8787; script ตรวจ Neon development ก่อนอ่านข้อมูล
+# เปิด Worker ที่ผูก R2 development bucket จริงก่อน (ต้อง wrangler login): bun run dev:api:r2
+# script ตรวจ Neon development และตรวจว่า Worker ใช้ bucket เดียวกับที่ดาวน์โหลดรูป
+# หากมีรูปหายจาก R2 script จะหยุด; ใช้ --allow-missing-photos เพื่อสำรองต่อโดยบันทึกรายการที่หายไว้ใน manifest
 bun run backup:dev
 
 # ตรวจ manifest, จำนวนแถว และ checksum ก่อนเขียนข้อมูล
@@ -124,7 +127,7 @@ bun run restore:dev -- backups/<ชื่อโฟลเดอร์> --dry-run
 bun run restore:dev -- backups/<ชื่อโฟลเดอร์> --apply
 ```
 
-`restore.ts` ปฏิเสธ branch ที่มีรัง/ผลผลิต/ตรวจ/ทีม/audit อยู่แล้ว และตรวจชื่อ Worker, hostname Neon, ชื่อ R2 bucket ก่อนเขียน การกู้คืนจะสร้างรายการและอัปโหลดรูปใน R2 ก่อนลงฐานข้อมูล; หากเกิดข้อผิดพลาดกลางทาง ให้หยุดและสร้าง development branch/bucket ใหม่ก่อนลองอีกครั้ง ห้ามใช้ script นี้กับ staging หรือ production
+`restore.ts` ปฏิเสธ branch ที่มีรัง/ผลผลิต/ตรวจ/ทีม/audit อยู่แล้ว และตรวจชื่อ Worker, hostname Neon, ชื่อ R2 bucket ก่อนเขียน การกู้คืนอัปโหลดรูปใน R2 ก่อน (ข้าม key ที่มีอยู่แล้วและ SHA-256 ตรงกัน แต่หยุดถ้าเนื้อหาต่างกัน) แล้วเขียนทุกตารางใน transaction เดียว; หากล้มกลางทาง ฐานข้อมูลจะไม่ถูกเขียนบางส่วน และรันคำสั่งเดิมซ้ำได้ทันที ห้ามใช้ script นี้กับ staging หรือ production
 
 ## Quality gate ใน GitHub Actions
 
@@ -133,5 +136,5 @@ workflow `CI` รัน generate types, typecheck, unit tests, build, Playwright
 - Secret `NEON_DATABASE_URL_CI`: connection string ของ branch CI เท่านั้น
 - Variable `NEON_CI_DATABASE_HOST`: hostname ที่ตรงกับ connection string และไม่ใช่ host ของ development, staging หรือ production
 
-เมื่อตั้งค่าแล้ว job จะรัน migration กับ branch CI ผ่าน guard, เปิด Worker local (ใช้ R2 emulator), ทำ smoke และ E2E กับ API จริงก่อนจบงาน ทั้งนี้ CI ไม่ deploy ไป staging หรือ production; ดูผลตรวจ security เพิ่มเติมใน `docs/security-review-phase-6.md`
+เมื่อตั้งค่าแล้ว job จะรัน migration กับ branch CI ผ่าน guard, เปิด Worker local (ใช้ R2 emulator และ `ENVIRONMENT=development` ใน `.dev.vars` ที่ CI สร้าง), ทำ smoke และ E2E กับ API จริงก่อนจบงาน ทั้งนี้ CI ไม่ deploy ไป staging หรือ production; ดูผลตรวจ security เพิ่มเติมใน `docs/security-review-phase-6.md`
 

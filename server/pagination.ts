@@ -13,6 +13,18 @@ const dateRangeIssue = {
 
 export const dateRangeQuery = z.object(dateRangeFields).refine(validDateRange, dateRangeIssue);
 
+export const exportQuery = z.object({
+  ...dateRangeFields,
+  full: z.enum(["true", "false"]).optional(),
+}).refine(validDateRange, dateRangeIssue).refine(
+  (value) => value.full !== "true" || (!value.from && !value.to),
+  { path: ["full"], message: "การสำรองข้อมูลทั้งหมดต้องไม่ระบุช่วงวันที่" },
+);
+
+export const exportAuditQuery = z.object({
+  offset: z.coerce.number().int().min(0).max(10_000_000).default(0),
+});
+
 export const historyQuery = z.object({
   hiveId: z.uuid().optional(),
   ...dateRangeFields,

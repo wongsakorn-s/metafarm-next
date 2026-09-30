@@ -16,12 +16,25 @@ const localRequest = new Request('http://127.0.0.1:8787/api/me');
 const env = {
   DATABASE_URL: 'postgresql://local:local@localhost:5432/metafarm',
   OWNER_EMAIL: 'owner@example.com',
-  DEV_AUTH_EMAIL: 'Owner@Example.com'
+  DEV_AUTH_EMAIL: 'Owner@Example.com',
+  ENVIRONMENT: 'development'
 } as AppEnv;
 
 describe('admin authorization', () => {
   it('allows the owner in local development only', async () => {
     expect(await getStaff(localRequest, env)).toEqual({ email: 'owner@example.com', role: 'owner' });
+  });
+
+  it('does not bypass Access unless ENVIRONMENT is development', async () => {
+    expect(await getStaff(localRequest, { ...env, ENVIRONMENT: undefined })).toBeNull();
+    expect(await getStaff(localRequest, { ...env, ENVIRONMENT: 'production' })).toBeNull();
+  });
+
+  it('denies instead of throwing when the Access team domain is malformed', async () => {
+    const request = new Request('https://metafarm.example/api/me', {
+      headers: { 'Cf-Access-Jwt-Assertion': 'token' }
+    });
+    expect(await getStaff(request, { ...env, ACCESS_AUD: 'aud', ACCESS_TEAM_DOMAIN: 'not a url' })).toBeNull();
   });
 
   it('does not bypass Access when an audience is configured', async () => {

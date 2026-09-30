@@ -11,6 +11,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
       - run: bun install --frozen-lockfile
       - run: bun run gen
       - run: bun run check
@@ -23,6 +25,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
       - run: bun install --frozen-lockfile
       - id: ci-db
         env:
@@ -40,7 +44,7 @@ jobs:
       - if: steps.ci-db.outputs.available == 'true'
         env:
           DATABASE_URL: ${{ secrets.NEON_DATABASE_URL_CI }}
-        run: bun -e 'await Bun.write(".dev.vars", `DATABASE_URL=${process.env.DATABASE_URL}\nOWNER_EMAIL=ci-owner@example.invalid\nDEV_AUTH_EMAIL=ci-owner@example.invalid\n`);'
+        run: bun -e 'await Bun.write(".dev.vars", `DATABASE_URL=${process.env.DATABASE_URL}\nOWNER_EMAIL=ci-owner@example.invalid\nDEV_AUTH_EMAIL=ci-owner@example.invalid\nENVIRONMENT=development\n`);'
       - if: steps.ci-db.outputs.available == 'true'
         env:
           METAFARM_CI_DB: "true"

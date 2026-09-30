@@ -39,7 +39,7 @@ export async function prepareIdempotency(
 ): Promise<PreparedIdempotency> {
   const key = z.uuid().parse(req.get("Idempotency-Key") ?? crypto.randomUUID());
   const requestHash = await hashRequest(input);
-  await db.delete(idempotencyKeys).where(lt(idempotencyKeys.createdAt, sql`now() - interval '24 hours'`));
+  await db.delete(idempotencyKeys).where(lt(idempotencyKeys.createdAt, sql`now() - interval '7 days'`));
   const [previous] = await db.select().from(idempotencyKeys).where(eq(idempotencyKeys.key, key)).limit(1);
   if (previous) assertMatchingReplay(previous, { actor, operation, requestHash });
   return { key, actor, operation, requestHash, createdAt: new Date().toISOString(),
