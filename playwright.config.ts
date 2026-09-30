@@ -5,10 +5,10 @@ export default defineConfig({
   fullyParallel: true,
   use: {
     ...devices["Desktop Chrome"],
-    baseURL: "http://127.0.0.1:5173",
+    baseURL: process.env.E2E_BASE_URL ?? "http://127.0.0.1:5173",
     serviceWorkers: "block",
   },
-  webServer: {
+  webServer: process.env.E2E_BASE_URL ? undefined : {
     command: "bun run dev:web -- --port 5173",
     url: "http://127.0.0.1:5173",
     reuseExistingServer: !process.env.CI,

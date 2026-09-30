@@ -37,7 +37,7 @@
 3. ตรวจ repo เก่าเพื่อย้าย endpoint/รูปแบบข้อมูลอากาศ และเพิ่มข้อมูลจริงพร้อม fallback ที่ไม่แสดงข้อมูลปลอม
 4. เตรียมตัวนำเข้าข้อมูลแบบ dry-run จาก export ที่ไม่ใช่ production; ตรวจ mapping/จำนวน/รูปก่อนนำเข้า Neon development และ staging
 5. สำรอง/กู้คืน JSON, CSV, audit และไฟล์รูปมีสคริปต์แล้ว; ค้างทดสอบวงจรจริงจนกว่าจะมี development R2 bucket/S3 credentials ที่จำกัดขอบเขต; ประเมิน cursor pagination เมื่อข้อมูลมากหรือเขียนพร้อมกันบ่อย
-6. เพิ่ม E2E บน staging สำหรับ owner/staff, การเพิ่ม/แก้ไข/ลบข้อมูล, อัปโหลดรูป, ปิดสิทธิ์ทีม และลิงก์รายละเอียดจาก QR โดยใช้ข้อมูลทดสอบที่ลบได้
+6. E2E local และ CI workflow เพิ่มแล้ว; ยังต้องตั้ง Neon CI branch/secrets และทดสอบ E2E บน staging สำหรับ owner/staff, CRUD, อัปโหลดรูป, ปิดสิทธิ์ทีม และ QR โดยใช้ข้อมูลทดสอบที่ลบได้
 7. ทดสอบบนมือถือจริง: กล้อง QR, รูปจากกล้อง, สิทธิ์กล้อง, สัญญาณอ่อน, การพิมพ์ A4 และขนาดจอ 320–1440 px
 8. ตรวจเนื้อหาสาธารณะกับเจ้าของฟาร์ม ใช้รูปเดิมไปก่อน และปล่อยสินค้า/อบรม/สมุดพกกับช่องทางติดต่อเมื่อยืนยันเนื้อหาจริง; วัด Lighthouse Mobile
 9. หลังรีวิวและ staging QA ครบ จึงเตรียมขั้นตอน release แยก พร้อม rollback; production deploy ยังถูกห้ามในงานนี้
@@ -129,4 +129,20 @@
 - manifest ระบุจำนวนรัง ผลผลิต ตรวจ ทีม audit และรูป; restore ตรวจ checksum ไฟล์ JSON และรูปก่อนเริ่มเขียน, ปฏิเสธฐานข้อมูลที่ไม่ว่าง, ตรวจภาพหลังอัปโหลดกลับ และเทียบจำนวนหลัง restore
 - หากการ restore จริงล้มเหลวหลังเริ่มเขียน ต้องสร้าง development branch/bucket ใหม่; script ไม่พยายามลบหรือเขียนทับข้อมูลที่มีอยู่
 - ไม่มี migration ใน Phase นี้
+
+## Phase 6: Quality Gate (ข้อกำหนดล่าสุด)
+
+| ความสามารถ | ระดับที่ผ่าน | ข้อจำกัด |
+| --- | --- | --- |
+| gen/check/unit/build และ Playwright E2E | คำสั่งทั้งหมดผ่านในเครื่อง; E2E local Worker 20/20 | ยังไม่ได้ยืนยัน GitHub Actions run หลังเพิ่ม workflow |
+| Flow UI: sheet/focus, QR, draft/retry, filters, export, viewport 320–1440px | Playwright mock API; axe serious/critical 0 บนหน้า public และ admin | mock API ไม่แทนการทดสอบ staging หรือ R2 จริง |
+| Security headers static/API และ readiness endpoint ต้องมีสิทธิ์ | ตรวจด้วย local Worker + Playwright | ยังไม่ตรวจบน staging |
+| Dependency audit | `bun audit` พบ 1 moderate: `esbuild <=0.24.2` ทางอ้อมจาก `drizzle-kit` → `@esbuild-kit/core-utils` | รุ่น esbuild ที่ Vite/Wrangler ใช้โดยตรงใหม่กว่า; package เก่ามาจาก loader ใน dev dependency tree และยังไม่ได้แทนที่ |
+| Worker integration job กับ Neon branch แยกสำหรับ CI | workflow ตรวจ host และปฏิเสธ dev/staging/production | ข้ามงาน integration จนกว่าจะตั้ง `NEON_DATABASE_URL_CI` secret และ `NEON_CI_DATABASE_HOST` variable ใน GitHub; job ใช้ R2 local emulator |
+
+- `public/_headers` กำหนด CSP, Permissions-Policy (`camera=(self)`), HSTS และ header ป้องกัน clickjacking; API ส่ง security headers เช่นกัน
+- `/api/*` ตรวจ Cloudflare Access/DEV local identity ทุก request; `/health/ready` ตรวจ owner/staff ก่อนแตะฐานข้อมูล ส่วน `/health` เปิดเฉพาะ liveness ที่ไม่เปิดเผยสถานะฐานข้อมูล
+- Upload ยังตรวจ MIME signature, ขนาด และใช้ R2 private binding พร้อม UUID key; ยังไม่ผ่านการตรวจไฟล์/credentials บน R2 staging ใน Phase นี้
+- รายงานตารางควบคุมและผลตรวจฉบับเต็มอยู่ที่ `docs/security-review-phase-6.md`
+- ไม่มี migration และไม่มีการ deploy staging/production จาก Phase นี้
 

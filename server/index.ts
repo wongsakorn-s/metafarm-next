@@ -36,6 +36,9 @@ app.use((req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Permissions-Policy", "camera=(self), microphone=(), geolocation=()");
+  res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  res.setHeader("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
   res.on("finish", () =>
     console.info("API request", {
       requestId,
@@ -81,7 +84,13 @@ function withHistoryPermissions<T extends {
 }
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
-app.get("/health/ready", async (_req, res) => {
+app.get("/health/ready", async (req, res) => {
+  const host = req.get("host") ?? "invalid.local";
+  const headers = new Headers();
+  const token = req.get("Cf-Access-Jwt-Assertion");
+  if (token) headers.set("Cf-Access-Jwt-Assertion", token);
+  const user = await getStaff(new Request(new URL(req.originalUrl, `https://${host}`), { headers }), bindings);
+  if (!user) throw new HttpError(403, "ไม่มีสิทธิ์ตรวจสถานะระบบ");
   await database().execute(sql`select 1`);
   res.json({ ok: true });
 });
@@ -90,11 +99,11 @@ app.use("/api", async (req, res, next) => {
   try {
     res.setHeader("Cache-Control", "private, no-store");
     const host = req.get("host") ?? "invalid.local";
-    const url = new URL(req.originalUrl, `https://${host}`);
-    const headers = new Headers();
-    const token = req.get("Cf-Access-Jwt-Assertion");
-    if (token) headers.set("Cf-Access-Jwt-Assertion", token);
-    const user = await getStaff(new Request(url, { headers }), bindings);
+    const user = await getStaff(new Request(new URL(req.originalUrl, `https://${host}`), {
+      headers: req.get("Cf-Access-Jwt-Assertion")
+        ? { "Cf-Access-Jwt-Assertion": req.get("Cf-Access-Jwt-Assertion")! }
+        : undefined,
+    }), bindings);
     if (!user) throw new HttpError(403, "ไม่มีสิทธิ์เข้าถึงหลังบ้าน");
     res.locals.staff = user;
     next();

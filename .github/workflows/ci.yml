@@ -3,6 +3,8 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+permissions:
+  contents: read
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -14,3 +16,45 @@ jobs:
       - run: bun run check
       - run: bun run test
       - run: bun run build
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run test:e2e
+  worker-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - id: ci-db
+        env:
+          NEON_DATABASE_URL_CI: ${{ secrets.NEON_DATABASE_URL_CI }}
+          NEON_CI_DATABASE_HOST: ${{ vars.NEON_CI_DATABASE_HOST }}
+        run: |
+          if [ -z "$NEON_DATABASE_URL_CI" ] || [ -z "$NEON_CI_DATABASE_HOST" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "CI Worker integration tests skipped: configure a dedicated Neon CI branch and its host."
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.ci-db.outputs.available == 'true'
+        run: bun run gen && bun run build && bunx playwright install --with-deps chromium
+      - if: steps.ci-db.outputs.available == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.NEON_DATABASE_URL_CI }}
+        run: bun -e 'await Bun.write(".dev.vars", `DATABASE_URL=${process.env.DATABASE_URL}\nOWNER_EMAIL=ci-owner@example.invalid\nDEV_AUTH_EMAIL=ci-owner@example.invalid\n`);'
+      - if: steps.ci-db.outputs.available == 'true'
+        env:
+          METAFARM_CI_DB: "true"
+          NEON_CI_DATABASE_HOST: ${{ vars.NEON_CI_DATABASE_HOST }}
+        run: |
+          set -euo pipefail
+          bun --env-file=.dev.vars run db:migrate:local
+          bunx wrangler dev --port 8787 > "$RUNNER_TEMP/metafarm-worker.log" 2>&1 &
+          worker_pid=$!
+          trap 'kill "$worker_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8787/health/ready > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8787/health/ready > /dev/null
+          bun run smoke:local
+          E2E_BASE_URL=http://127.0.0.1:8787 bun run test:e2e

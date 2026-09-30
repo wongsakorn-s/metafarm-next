@@ -126,3 +126,12 @@ bun run restore:dev -- backups/<ชื่อโฟลเดอร์> --apply
 
 `restore.ts` ปฏิเสธ branch ที่มีรัง/ผลผลิต/ตรวจ/ทีม/audit อยู่แล้ว และตรวจชื่อ Worker, hostname Neon, ชื่อ R2 bucket ก่อนเขียน การกู้คืนจะสร้างรายการและอัปโหลดรูปใน R2 ก่อนลงฐานข้อมูล; หากเกิดข้อผิดพลาดกลางทาง ให้หยุดและสร้าง development branch/bucket ใหม่ก่อนลองอีกครั้ง ห้ามใช้ script นี้กับ staging หรือ production
 
+## Quality gate ใน GitHub Actions
+
+workflow `CI` รัน generate types, typecheck, unit tests, build, Playwright และ axe บนทุก pull request/push โดย worker-integration job จะข้ามอย่างปลอดภัยจนกว่าจะตั้งค่า Neon branch แยกสำหรับ CI:
+
+- Secret `NEON_DATABASE_URL_CI`: connection string ของ branch CI เท่านั้น
+- Variable `NEON_CI_DATABASE_HOST`: hostname ที่ตรงกับ connection string และไม่ใช่ host ของ development, staging หรือ production
+
+เมื่อตั้งค่าแล้ว job จะรัน migration กับ branch CI ผ่าน guard, เปิด Worker local (ใช้ R2 emulator), ทำ smoke และ E2E กับ API จริงก่อนจบงาน ทั้งนี้ CI ไม่ deploy ไป staging หรือ production; ดูผลตรวจ security เพิ่มเติมใน `docs/security-review-phase-6.md`
+
