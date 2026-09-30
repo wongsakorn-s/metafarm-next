@@ -17,6 +17,12 @@ if (legacyDestination) {
 } else {
   const root = document.getElementById("root")!;
   const isAdmin = location.pathname.startsWith("/admin");
+  if (isAdmin) {
+    // Admin routes are served the prerendered home page as the SPA fallback; drop its SEO tags.
+    document.querySelectorAll('link[rel="canonical"], meta[property^="og:"], script[type="application/ld+json"]')
+      .forEach((element) => element.remove());
+    document.querySelector<HTMLMetaElement>('meta[name="robots"]')?.setAttribute("content", "noindex,nofollow");
+  }
   const app = (
     <React.StrictMode>
       {isAdmin ? (

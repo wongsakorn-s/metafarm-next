@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { httpServerHandler } from "cloudflare:node";
 import express from "express";
-import { and, desc, eq, gte, isNull, lt, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lt, lte, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "./db";
 import { auditLogs, harvests, hives, inspections, staff } from "./db/schema";
@@ -19,12 +19,13 @@ import {
 } from "./validation";
 import { handleError, HttpError, jsonBody, photoBody } from "./http";
 import { detectImageMime } from "./image";
-import { dateRangeQuery, historyQuery, pageResult } from "./pagination";
+import { exportAuditQuery, exportQuery, historyQuery, pageResult } from "./pagination";
 import { canEditHistoryRecord, historyPermissions, requireOwner } from "./authorization";
 import { getCurrentWeather } from "./weather";
 import { auditedChange, noPreviousRecord } from "./audit";
 import { prepareIdempotency, replayAfterConflict } from "./idempotency";
 import { photoManifest, sha256Hex } from "./photo-manifest";
+import { farmMonth } from "./farm-date";
 
 const bindings = env as AppEnv;
 const app = express();
@@ -70,6 +71,30 @@ async function assertHive(hiveId: string) {
     .limit(1);
   if (!hive) throw new HttpError(404, "ไม่พบรังที่เลือก");
   if (hive.archivedAt) throw new HttpError(409, "รังนี้ถูกเก็บถาวรแล้ว ไม่สามารถเพิ่มบันทึกใหม่ได้");
+}
+
+async function assertStaffCanChangeHiveRecords(actor: StaffSession, hiveId: string) {
+  if (actor.role === "owner") return;
+  const [hive] = await database()
+    .select({ archivedAt: hives.archivedAt })
+    .from(hives)
+    .where(eq(hives.id, hiveId))
+    .limit(1);
+  if (!hive || hive.archivedAt)
+    throw new HttpError(409, "รังนี้ถูกเก็บถาวรแล้ว เฉพาะเจ้าของเท่านั้นที่แก้ไขบันทึกของรังนี้ได้");
+}
+
+/** Archived hives are visible to the owner only. */
+function activeHiveFor(actor: StaffSession) {
+  return actor.role === "owner" ? undefined : isNull(hives.archivedAt);
+}
+
+function staffEditRule(actor: StaffSession, creatorColumn: SQL) {
+  return actor.role === "staff"
+    ? sql`AND lower(${creatorColumn}) = lower(${actor.email})
+      AND created_at BETWEEN now() - interval '24 hours' AND now()
+      AND hive_id IN (SELECT id FROM hives WHERE archived_at IS NULL)`
+    : sql``;
 }
 
 function withHistoryPermissions<T extends {
@@ -123,7 +148,7 @@ app.get("/api/dashboard", async (req, res) => {
   const month = z
     .string()
     .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
-    .parse(req.query.month ?? new Date().toISOString().slice(0, 7));
+    .parse(req.query.month ?? farmMonth());
   const [year, monthNumber] = month.split("-").map(Number);
   const firstDay = `${month}-01`;
   const nextMonth = new Date(Date.UTC(year, monthNumber, 1))
@@ -159,6 +184,7 @@ app.get("/api/dashboard", async (req, res) => {
     db
       .select({ status: hives.status, count: sql<number>`count(*)::int` })
       .from(hives)
+      .where(isNull(hives.archivedAt))
       .groupBy(hives.status),
     db
       .select({
@@ -183,7 +209,7 @@ app.get("/api/dashboard", async (req, res) => {
       .from(harvests)
       .where(isNull(harvests.deletedAt)),
     db.select({ count: sql<number>`count(*)::int` }).from(inspections).where(isNull(inspections.deletedAt)),
-    db.select({ count: sql<number>`count(*)::int` }).from(hives),
+    db.select({ count: sql<number>`count(*)::int` }).from(hives).where(isNull(hives.archivedAt)),
   ]);
   const hiveStatuses = { Strong: 0, Normal: 0, Weak: 0, Empty: 0 };
   for (const row of statusRows) {
@@ -217,9 +243,13 @@ app.get("/api/dashboard", async (req, res) => {
 
 app.get("/api/export", async (req, res) => {
   requireOwner(session(res));
-  const { from, to } = dateRangeQuery.parse(req.query);
+  const { from, to, full } = exportQuery.parse(req.query);
+  // A full backup keeps soft-deleted records so a restore does not turn them into permanent deletes.
+  // Its audit log is fetched separately in pages from /api/export/audit because it grows without bound.
+  const fullBackup = full === "true";
   const db = database();
   const maxRows = 10_000;
+  const auditDate = sql`(${auditLogs.createdAt} AT TIME ZONE 'Asia/Bangkok')::date`;
   const [hiveRows, harvestRows, inspectionRows, teamRows, auditRows] = await Promise.all([
     db.select().from(hives).orderBy(hives.code).limit(maxRows + 1),
     db
@@ -229,7 +259,7 @@ app.get("/api/export", async (req, res) => {
         and(
           from ? gte(harvests.harvestedAt, from) : undefined,
           to ? lte(harvests.harvestedAt, to) : undefined,
-          isNull(harvests.deletedAt),
+          fullBackup ? undefined : isNull(harvests.deletedAt),
         ),
       )
       .orderBy(harvests.harvestedAt, harvests.id)
@@ -241,18 +271,28 @@ app.get("/api/export", async (req, res) => {
         and(
           from ? gte(inspections.inspectedAt, from) : undefined,
           to ? lte(inspections.inspectedAt, to) : undefined,
-          isNull(inspections.deletedAt),
+          fullBackup ? undefined : isNull(inspections.deletedAt),
         ),
       )
       .orderBy(inspections.inspectedAt, inspections.id)
       .limit(maxRows + 1),
     db.select().from(staff).orderBy(staff.email).limit(maxRows + 1),
-    db.select().from(auditLogs).orderBy(auditLogs.createdAt, auditLogs.id).limit(maxRows + 1),
+    fullBackup
+      ? Promise.resolve([])
+      : db
+        .select()
+        .from(auditLogs)
+        .where(and(
+          from ? sql`${auditDate} >= ${from}::date` : undefined,
+          to ? sql`${auditDate} <= ${to}::date` : undefined,
+        ))
+        .orderBy(auditLogs.createdAt, auditLogs.id)
+        .limit(maxRows + 1),
   ]);
   if ([hiveRows, harvestRows, inspectionRows, teamRows, auditRows].some((rows) => rows.length > maxRows)) {
-    throw new HttpError(413, "ข้อมูลเกิน 10,000 รายการต่อประเภท กรุณาเลือกช่วงวันที่ให้สั้นลง");
+    throw new HttpError(413, "ข้อมูลเกิน 10,000 รายการต่อประเภท กรุณาเลือกช่วงวันที่ให้สั้นลง หรือใช้สคริปต์สำรองข้อมูล");
   }
-  const photos = await photoManifest(bindings.MEDIA, inspectionRows);
+  const { photos, missingPhotos } = await photoManifest(bindings.MEDIA, inspectionRows);
   res.setHeader(
     "Content-Disposition",
     `attachment; filename="metafarm-records-${new Date().toISOString().slice(0, 10)}.json"`,
@@ -261,14 +301,31 @@ app.get("/api/export", async (req, res) => {
     formatVersion: 1,
     exportedAt: new Date().toISOString(),
     dateRange: { from: from ?? null, to: to ?? null },
+    fullBackup,
+    mediaBucket: bindings.MEDIA_BUCKET ?? null,
     photosIncluded: false,
     photos,
+    missingPhotos,
     hives: hiveRows,
     harvests: harvestRows,
     inspections: inspectionRows,
     team: teamRows,
+    auditIncluded: !fullBackup,
     audit: auditRows,
   });
+});
+
+app.get("/api/export/audit", async (req, res) => {
+  requireOwner(session(res));
+  const { offset } = exportAuditQuery.parse(req.query);
+  const limit = 1_000;
+  const rows = await database()
+    .select()
+    .from(auditLogs)
+    .orderBy(auditLogs.createdAt, auditLogs.id)
+    .limit(limit + 1)
+    .offset(offset);
+  res.json(pageResult(rows, offset, limit));
 });
 
 app.get("/api/audit", async (req, res) => {
@@ -319,7 +376,7 @@ app.get("/api/hives/by-code/:code", async (req, res) => {
   const [hive] = await database()
     .select({ id: hives.id, code: hives.code })
     .from(hives)
-    .where(eq(hives.code, code))
+    .where(and(eq(hives.code, code), activeHiveFor(session(res))))
     .limit(1);
   if (!hive) throw new HttpError(404, "ไม่พบรัง");
   res.json(hive);
@@ -335,7 +392,7 @@ app.get("/api/hives/:id", async (req, res) => {
     harvestTotals,
     inspectionTotals,
   ] = await Promise.all([
-    db.select().from(hives).where(eq(hives.id, id)).limit(1),
+    db.select().from(hives).where(and(eq(hives.id, id), activeHiveFor(session(res)))).limit(1),
     db
       .select()
       .from(harvests)
@@ -426,14 +483,19 @@ app.patch("/api/hives/:id", async (req, res) => {
   const input = hiveUpdate.parse(req.body);
   const db = database();
   const changed = await auditedChange(db, {
-    before: sql`SELECT id, to_jsonb(h) AS payload FROM hives h WHERE id = ${id}::uuid FOR UPDATE`,
+    before: sql`SELECT id, to_jsonb(h) AS payload FROM hives h
+      WHERE id = ${id}::uuid AND archived_at IS NULL FOR UPDATE`,
     change: sql`UPDATE hives SET name = ${input.name}, species = ${input.species ?? null},
       location = ${input.location ?? null}, status = ${input.status}
       WHERE id IN (SELECT id FROM before_record) RETURNING *`,
     actorEmail: session(res).email,
     action: "update", entity: "hive", entityId: id,
   });
-  if (!changed) throw new HttpError(404, "ไม่พบรัง");
+  if (!changed) {
+    const [existing] = await db.select({ id: hives.id }).from(hives).where(eq(hives.id, id)).limit(1);
+    if (existing) throw new HttpError(409, "รังนี้ถูกเก็บถาวรแล้ว กรุณานำกลับมาใช้งานก่อนแก้ไข");
+    throw new HttpError(404, "ไม่พบรัง");
+  }
   const [hive] = await db.select().from(hives).where(eq(hives.id, id));
   res.json(hive);
 });
@@ -534,10 +596,8 @@ app.patch("/api/harvests/:id", async (req, res) => {
   }
   if (input.hiveId !== current.hiveId)
     throw new HttpError(400, "ไม่สามารถย้ายผลผลิตไปยังรังอื่นได้");
-  const staffRule = actor.role === "staff"
-    ? sql`AND lower(coalesce(created_by, created_by_email)) = lower(${actor.email})
-      AND created_at BETWEEN now() - interval '24 hours' AND now()`
-    : sql``;
+  await assertStaffCanChangeHiveRecords(actor, current.hiveId);
+  const staffRule = staffEditRule(actor, sql`coalesce(created_by, created_by_email)`);
   const changed = await auditedChange(db, {
     before: sql`SELECT id, to_jsonb(h) AS payload FROM harvests h
       WHERE id = ${id}::uuid AND deleted_at IS NULL FOR UPDATE`,
@@ -613,7 +673,8 @@ app.post("/api/inspections", async (req, res) => {
       INSERT INTO audit_logs (id, actor_email, action, entity, entity_id, before, after)
       SELECT ${crypto.randomUUID()}::uuid, ${actor.email}, 'update', 'hive',
         ${input.hiveId}, previous_hive.payload, to_jsonb(changed_hive)
-      FROM changed_hive CROSS JOIN previous_hive RETURNING id
+      FROM changed_hive CROSS JOIN previous_hive
+      WHERE changed_hive.status IS DISTINCT FROM previous_hive.status RETURNING id
     ),
     logged_inspection AS (
       INSERT INTO audit_logs (id, actor_email, action, entity, entity_id, before, after)
@@ -621,7 +682,7 @@ app.post("/api/inspections", async (req, res) => {
         ${id}, NULL::jsonb, to_jsonb(created)
       FROM created RETURNING id
     )
-    SELECT claimed.response FROM claimed CROSS JOIN logged_hive CROSS JOIN logged_inspection
+    SELECT claimed.response FROM claimed CROSS JOIN logged_inspection
   `);
   if (result.rows[0]) return void res.status(201).json(result.rows[0].response);
   await assertHive(input.hiveId);
@@ -638,10 +699,8 @@ app.patch("/api/inspections/:id", async (req, res) => {
   const actor = session(res);
   if (!canEditHistoryRecord(actor, current.createdBy, current.createdAt))
     throw new HttpError(403, "ไม่มีสิทธิ์แก้ไขบันทึกการตรวจนี้");
-  const staffRule = actor.role === "staff"
-    ? sql`AND lower(created_by) = lower(${actor.email})
-      AND created_at BETWEEN now() - interval '24 hours' AND now()`
-    : sql``;
+  await assertStaffCanChangeHiveRecords(actor, current.hiveId);
+  const staffRule = staffEditRule(actor, sql`created_by`);
   const changed = await auditedChange(db, {
     before: sql`SELECT id, to_jsonb(i) AS payload FROM inspections i
       WHERE id = ${id}::uuid AND deleted_at IS NULL FOR UPDATE`,
@@ -653,6 +712,20 @@ app.patch("/api/inspections/:id", async (req, res) => {
     action: "update", entity: "inspection", entityId: id,
   });
   if (!changed) throw new HttpError(403, "หมดเวลาแก้ไขบันทึกการตรวจนี้");
+  // The hive's status mirrors its latest inspection, so correcting that inspection updates the hive too.
+  await auditedChange(db, {
+    before: sql`SELECT h.id, to_jsonb(h) AS payload FROM hives h
+      WHERE h.id = ${current.hiveId}::uuid AND h.archived_at IS NULL
+        AND h.status IS DISTINCT FROM ${input.status}
+        AND (SELECT i.id FROM inspections i
+          WHERE i.hive_id = h.id AND i.deleted_at IS NULL
+          ORDER BY i.inspected_at DESC, i.created_at DESC, i.id DESC LIMIT 1) = ${id}::uuid
+      FOR UPDATE`,
+    change: sql`UPDATE hives SET status = ${input.status}
+      WHERE id IN (SELECT id FROM before_record) RETURNING *`,
+    actorEmail: actor.email,
+    action: "update", entity: "hive", entityId: current.hiveId,
+  });
   const [updated] = await db.select().from(inspections).where(eq(inspections.id, id));
   res.json(withHistoryPermissions(updated, actor));
 });
@@ -694,10 +767,8 @@ app.put("/api/inspections/:id/photo", photoBody, async (req, res) => {
   const actor = session(res);
   if (!canEditHistoryRecord(actor, record.createdBy, record.createdAt))
     throw new HttpError(403, "ไม่มีสิทธิ์แก้ไขรูปบันทึกการตรวจนี้");
-  const staffRule = actor.role === "staff"
-    ? sql`AND lower(created_by) = lower(${actor.email})
-      AND created_at BETWEEN now() - interval '24 hours' AND now()`
-    : sql``;
+  await assertStaffCanChangeHiveRecords(actor, record.hiveId);
+  const staffRule = staffEditRule(actor, sql`created_by`);
   const key = `inspections/${id}/${crypto.randomUUID()}`;
   await bindings.MEDIA.put(key, req.body, {
     httpMetadata: { contentType: mime },
@@ -717,6 +788,11 @@ app.put("/api/inspections/:id/photo", photoBody, async (req, res) => {
   } catch (cause) {
     await bindings.MEDIA.delete(key);
     throw cause;
+  }
+  if (record.imageKey && record.imageKey !== key) {
+    // The previous file is no longer referenced; a failed cleanup must not fail the upload.
+    await bindings.MEDIA.delete(record.imageKey).catch((cause) =>
+      console.warn("Could not delete replaced inspection photo", { inspectionId: id, cause }));
   }
   res.json({ ok: true });
 });

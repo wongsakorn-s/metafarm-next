@@ -36,6 +36,29 @@ describe("backup manifest", () => {
     expect((await readFile(path.join(root, "records.json"))).length).toBe(recordsBytes.length);
   });
 
+  it("accepts photos recorded as missing, but not unlisted ones", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "metafarm-backup-test-"));
+    folders.push(root);
+    const inspectionId = "2d88f6f2-19b3-4f12-8971-484cf7491fe3";
+    const key = `inspections/${inspectionId}/ed714789-d96b-4d32-ad5f-92257b53cdae`;
+    const write = async (missingPhotos: { inspectionId: string; key: string }[]) => {
+      const records = {
+        formatVersion: 1, exportedAt: new Date().toISOString(), missingPhotos,
+        hives: [], harvests: [], inspections: [{ id: inspectionId, imageKey: key }], team: [], audit: [], photos: [],
+      };
+      const recordsBytes = new TextEncoder().encode(JSON.stringify(records));
+      await writeFile(path.join(root, "records.json"), recordsBytes);
+      await writeFile(path.join(root, "manifest.json"), JSON.stringify({
+        formatVersion: 1, createdAt: new Date().toISOString(), recordsSha256: sha256(recordsBytes),
+        counts: { hives: 0, harvests: 0, inspections: 1, team: 0, audit: 0, photos: 0 }, photos: [], missingPhotos,
+      }));
+    };
+    await write([{ inspectionId, key }]);
+    expect((await verifyBackupFolder(root)).manifest.missingPhotos).toHaveLength(1);
+    await write([]);
+    await expect(verifyBackupFolder(root)).rejects.toThrow("ไม่มีใน manifest");
+  });
+
   it("rejects unsafe R2 keys", () => {
     expect(() => photoPath("C:/backups", "../outside")).toThrow();
   });

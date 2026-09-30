@@ -63,19 +63,27 @@ const existing = await Promise.all([
 if (existing.some((rows) => rows.length)) throw new Error("Neon development branch ไม่ว่าง ห้าม restore ทับข้อมูลเดิม");
 
 const { client, bucket } = await developmentR2();
-for (const photo of manifest.photos) {
+
+async function existingPhotoHash(key: string): Promise<string | null> {
   try {
-    await client.send(new HeadObjectCommand({ Bucket: bucket, Key: photo.key }));
-    throw new Error(`R2 development มี key อยู่แล้ว: ${photo.key}`);
+    const head = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+    if (head.Metadata?.sha256) return head.Metadata.sha256;
+    const object = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+    return object.Body ? sha256(await object.Body.transformToByteArray()) : null;
   } catch (cause) {
-    if (cause instanceof Error && cause.message.startsWith("R2 development มี key")) throw cause;
     const status = typeof cause === "object" && cause !== null && "$metadata" in cause
       ? (cause.$metadata as { httpStatusCode?: number }).httpStatusCode : undefined;
-    if (status !== 404) throw cause;
+    if (status === 404) return null;
+    throw cause;
   }
 }
 
+// Photos go first and are skipped when an identical copy exists, so a restore that stopped
+// part-way (for example before the database transaction) can simply be run again.
 for (const photo of manifest.photos) {
+  const existing = await existingPhotoHash(photo.key);
+  if (existing === photo.sha256) continue;
+  if (existing !== null) throw new Error(`R2 development มี key อยู่แล้วแต่เนื้อหาไม่ตรงกับ backup: ${photo.key}`);
   const bytes = await readFile(photoPath(root, photo.key));
   await client.send(new PutObjectCommand({
     Bucket: bucket, Key: photo.key, Body: bytes,
@@ -92,19 +100,25 @@ function batches<T>(rows: readonly T[], size = 100): T[][] {
   for (let offset = 0; offset < rows.length; offset += size) result.push(rows.slice(offset, offset + size));
   return result;
 }
-for (const batch of batches(teamRows)) await db.insert(staff).values(batch.map((row) => ({ ...row, createdAt: new Date(row.createdAt) })));
-for (const batch of batches(hiveRows)) await db.insert(hives).values(batch.map((row) => ({ ...row, createdAt: new Date(row.createdAt), archivedAt: row.archivedAt ? new Date(row.archivedAt) : null })));
-for (const batch of batches(harvestRows)) await db.insert(harvests).values(batch.map((row) => ({
-  ...row, createdAt: new Date(row.createdAt), updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
-  deletedAt: row.deletedAt ? new Date(row.deletedAt) : null,
-})));
-for (const batch of batches(inspectionRows)) await db.insert(inspections).values(batch.map((row) => ({
-  ...row, createdAt: new Date(row.createdAt), updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
-  deletedAt: row.deletedAt ? new Date(row.deletedAt) : null,
-})));
-for (const batch of batches(auditRows)) await db.insert(auditLogs).values(batch.map((row) => ({
-  ...row, createdAt: new Date(row.createdAt),
-})));
+const date = (value: string | null) => (value ? new Date(value) : null);
+const inserts = [
+  ...batches(teamRows).map((batch) => db.insert(staff).values(batch.map((row) => ({ ...row, createdAt: new Date(row.createdAt) })))),
+  ...batches(hiveRows).map((batch) => db.insert(hives).values(batch.map((row) => ({
+    ...row, createdAt: new Date(row.createdAt), archivedAt: date(row.archivedAt),
+  })))),
+  ...batches(harvestRows).map((batch) => db.insert(harvests).values(batch.map((row) => ({
+    ...row, createdAt: new Date(row.createdAt), updatedAt: date(row.updatedAt), deletedAt: date(row.deletedAt),
+  })))),
+  ...batches(inspectionRows).map((batch) => db.insert(inspections).values(batch.map((row) => ({
+    ...row, createdAt: new Date(row.createdAt), updatedAt: date(row.updatedAt), deletedAt: date(row.deletedAt),
+  })))),
+  ...batches(auditRows).map((batch) => db.insert(auditLogs).values(batch.map((row) => ({
+    ...row, createdAt: new Date(row.createdAt),
+  })))),
+];
+// db.batch runs every insert in one transaction: either the whole backup is restored or nothing is.
+const [firstInsert, ...otherInserts] = inserts;
+if (firstInsert) await db.batch([firstInsert, ...otherInserts]);
 
 const counts = {
   hives: (await db.select({ count: sql<number>`count(*)::int` }).from(hives))[0].count,

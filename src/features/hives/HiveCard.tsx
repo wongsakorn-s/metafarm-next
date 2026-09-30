@@ -47,9 +47,11 @@ export function HiveCard({
           <ButtonLink href={`/admin/hives/${hive.id}`} variant="secondary">
             {th.admin.details}
           </ButtonLink>
-          <Button variant="outline" onClick={() => setOpen(true)}>
-            {th.admin.editData}
-          </Button>
+          {!hive.archivedAt && (
+            <Button variant="outline" onClick={() => setOpen(true)}>
+              {th.admin.editData}
+            </Button>
+          )}
           {owner && (
             <Button variant="outline" disabled={busy} onClick={() => setConfirming(hive.archivedAt ? "restore" : "archive")}>
               {hive.archivedAt ? th.admin.restoreHive : th.admin.archiveHive}

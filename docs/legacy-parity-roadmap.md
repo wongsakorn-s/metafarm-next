@@ -99,8 +99,8 @@
 | Draft ต่อผู้ใช้/รังและแจ้ง offline | Playwright mock API | draft ไม่รวมรูปและไม่มี offline write queue ตามขอบเขต |
 | Progress รูปและปุ่มลองอัปโหลดซ้ำ | Playwright mock API | ถ้าปิดแท็บหลังบันทึกตรวจแต่ก่อนอัปโหลดรูปซ้ำ ไฟล์รูปจะไม่อยู่ใน draft |
 
-- Migration `0003_cool_inhumans.sql` เพิ่ม `idempotency_keys` แบบ backward compatible; ใช้ CTE statement เดียวกับ create/audit เพื่อกันข้อมูลซ้ำ และลบ key ที่เก่ากว่า 24 ชั่วโมงก่อนคำขอสร้างใหม่
-- Rollback ที่ปลอดภัย: deploy โค้ดเดิมโดยคงตาราง `idempotency_keys` ไว้; การ drop ตารางจะทำให้คำขอ retry ที่ค้างอยู่สูญเสียการป้องกันข้อมูลซ้ำ จึงต้องรอพ้น 24 ชั่วโมงและสำรองก่อนหากจะลบจริง
+- Migration `0003_cool_inhumans.sql` เพิ่ม `idempotency_keys` แบบ backward compatible; ใช้ CTE statement เดียวกับ create/audit เพื่อกันข้อมูลซ้ำ และลบ key ที่เก่ากว่า 7 วันก่อนคำขอสร้างใหม่
+- Rollback ที่ปลอดภัย: deploy โค้ดเดิมโดยคงตาราง `idempotency_keys` ไว้; การ drop ตารางจะทำให้คำขอ retry ที่ค้างอยู่สูญเสียการป้องกันข้อมูลซ้ำ จึงต้องรอพ้น 7 วันและสำรองก่อนหากจะลบจริง
 - ผลการทดสอบอุปกรณ์ที่ยังค้างระบุใน `docs/field-device-testing.md`; **ยังไม่ผ่านระดับ staging หรือ production**
 
 ## Phase 4: Public Site (ข้อกำหนดล่าสุด)

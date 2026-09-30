@@ -7,8 +7,11 @@ import { auditLogs, harvests, hives, idempotencyKeys, inspections, staff } from 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL ไม่พร้อมใช้งาน");
 const db = getDb(databaseUrl);
-const baseUrl = "http://127.0.0.1:8787/api";
-const today = new Date().toISOString().slice(0, 10);
+const workerPort = process.env.SMOKE_WORKER_PORT ?? "8787";
+if (!/^\d{2,5}$/.test(workerPort)) throw new Error("SMOKE_WORKER_PORT ต้องเป็นหมายเลขพอร์ต");
+const baseUrl = `http://127.0.0.1:${workerPort}/api`;
+// Farm dates (and the export's audit date filter) use Thai time.
+const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
 const code = `SMOKE-${crypto.randomUUID().slice(0, 8)}`.toUpperCase();
 const teamEmail = `smoke-${crypto.randomUUID()}@example.invalid`;
 
@@ -117,6 +120,11 @@ try {
   assert.equal(detail.totals.honeyMl, 125);
   assert.equal(detail.totals.propolisG, 1.5);
   assert.equal(detail.totals.inspectionCount, 2);
+  // Correcting the latest inspection updates the hive's status as well.
+  await request(`/inspections/${secondInspection.id}`, "PATCH", {
+    inspectedAt: today, status: "Weak", notes: null,
+  });
+  assert.equal((await request<HiveDetail>(`/hives/${hiveId}`)).hive.status, "Weak");
   const harvestPage = await request<Page>(`/harvests?hiveId=${hiveId}&limit=1`);
   assert.equal(harvestPage.items.length, 1);
   assert.equal(harvestPage.nextOffset, null);
@@ -147,12 +155,20 @@ try {
   assert.equal(exported.harvests.filter((item) => item.hiveId === hiveId).length, 1);
   assert.equal(exported.inspections.filter((item) => item.hiveId === hiveId).length, 2);
   assert.ok(exported.audit.some((item) => item.entityId === hiveId && item.action === "create"));
+  const fullExport = await request<ExportData & { fullBackup: boolean }>("/export?full=true");
+  assert.equal(fullExport.fullBackup, true);
+  assert.equal(fullExport.audit.length, 0);
+  const auditExport = await request<{ items: unknown[]; nextOffset: number | null }>("/export/audit");
+  assert.ok(auditExport.items.length > 0);
   await request<{ ok: true }>(`/harvests/${createdHarvest.id}`, "DELETE");
   const afterDelete = await request<Page>(`/harvests?hiveId=${hiveId}`);
   assert.equal(afterDelete.items.length, 0);
   await request<{ ok: true }>(`/inspections/${firstInspection.id}`, "DELETE");
   const afterInspectionDelete = await request<Page>(`/inspections?hiveId=${hiveId}`);
   assert.equal(afterInspectionDelete.items.length, 1);
+  const fullAfterDelete = await request<ExportData>("/export?full=true");
+  assert.ok(fullAfterDelete.harvests.some((item) => item.id === createdHarvest.id));
+  assert.ok(fullAfterDelete.inspections.some((item) => item.id === firstInspection.id));
   const summaryAfterDelete = await request<Summary>(`/dashboard?month=${today.slice(0, 7)}`);
   assert.equal(summaryAfterDelete.summary.harvestCount, baseline.summary.harvestCount);
   assert.equal(summaryAfterDelete.summary.totalHoneyMl, baseline.summary.totalHoneyMl);
@@ -169,7 +185,13 @@ try {
   const activeHives = await request<Array<{ id: string }>>("/hives");
   assert.ok(!activeHives.some((item) => item.id === hiveId));
   const summaryAfterArchive = await request<Summary>(`/dashboard?month=${today.slice(0, 7)}`);
-  assert.equal(summaryAfterArchive.summary.hiveCount, baseline.summary.hiveCount + 1);
+  assert.equal(summaryAfterArchive.summary.hiveCount, baseline.summary.hiveCount);
+  const archivedEdit = await fetch(`${baseUrl}/hives/${hiveId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "Archived edit", status: "Normal" }),
+  });
+  assert.equal(archivedEdit.status, 409);
   assert.equal(summaryAfterArchive.summary.harvestCount, baseline.summary.harvestCount);
   const rejected = await fetch(`${baseUrl}/harvests`, {
     method: "POST",
