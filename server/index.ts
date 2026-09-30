@@ -24,6 +24,7 @@ import { canEditHistoryRecord, historyPermissions, requireOwner } from "./author
 import { getCurrentWeather } from "./weather";
 import { auditedChange, noPreviousRecord } from "./audit";
 import { prepareIdempotency, replayAfterConflict } from "./idempotency";
+import { photoManifest, sha256Hex } from "./photo-manifest";
 
 const bindings = env as AppEnv;
 const app = express();
@@ -210,7 +211,7 @@ app.get("/api/export", async (req, res) => {
   const { from, to } = dateRangeQuery.parse(req.query);
   const db = database();
   const maxRows = 10_000;
-  const [hiveRows, harvestRows, inspectionRows, teamRows] = await Promise.all([
+  const [hiveRows, harvestRows, inspectionRows, teamRows, auditRows] = await Promise.all([
     db.select().from(hives).orderBy(hives.code).limit(maxRows + 1),
     db
       .select()
@@ -237,10 +238,12 @@ app.get("/api/export", async (req, res) => {
       .orderBy(inspections.inspectedAt, inspections.id)
       .limit(maxRows + 1),
     db.select().from(staff).orderBy(staff.email).limit(maxRows + 1),
+    db.select().from(auditLogs).orderBy(auditLogs.createdAt, auditLogs.id).limit(maxRows + 1),
   ]);
-  if ([hiveRows, harvestRows, inspectionRows, teamRows].some((rows) => rows.length > maxRows)) {
+  if ([hiveRows, harvestRows, inspectionRows, teamRows, auditRows].some((rows) => rows.length > maxRows)) {
     throw new HttpError(413, "ข้อมูลเกิน 10,000 รายการต่อประเภท กรุณาเลือกช่วงวันที่ให้สั้นลง");
   }
+  const photos = await photoManifest(bindings.MEDIA, inspectionRows);
   res.setHeader(
     "Content-Disposition",
     `attachment; filename="metafarm-records-${new Date().toISOString().slice(0, 10)}.json"`,
@@ -250,10 +253,12 @@ app.get("/api/export", async (req, res) => {
     exportedAt: new Date().toISOString(),
     dateRange: { from: from ?? null, to: to ?? null },
     photosIncluded: false,
+    photos,
     hives: hiveRows,
     harvests: harvestRows,
     inspections: inspectionRows,
     team: teamRows,
+    audit: auditRows,
   });
 });
 
@@ -687,6 +692,7 @@ app.put("/api/inspections/:id/photo", photoBody, async (req, res) => {
   const key = `inspections/${id}/${crypto.randomUUID()}`;
   await bindings.MEDIA.put(key, req.body, {
     httpMetadata: { contentType: mime },
+    customMetadata: { sha256: await sha256Hex(Uint8Array.from(req.body)) },
   });
   try {
     const changed = await auditedChange(db, {

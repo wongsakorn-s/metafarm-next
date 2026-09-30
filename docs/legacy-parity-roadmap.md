@@ -22,7 +22,7 @@
 | แก้ไข/ลบผลผลิตย้อนหลัง | ผ่าน unit test และ smoke test บน Neon development | เพิ่มผู้สร้างรายการ; staff แก้ไขรายการของตัวเองภายใน 24 ชม.; owner แก้ไข/ลบได้ทุกรายการ; ยังไม่ตรวจบน staging |
 | สภาพอากาศปัจจุบันในหลังบ้าน | ผ่าน unit test และ local development (ตรวจกรณีไม่มี key) | ใช้ OpenWeather ตามระบบเดิม, cache 5 นาทีและใช้ข้อมูลจริงล่าสุดเมื่อ upstream ล่ม; ยังไม่มี API key บน staging จึงยังไม่ตรวจข้อมูลสด |
 | กรองประวัติตามช่วงวันที่ | ผ่านใน development | ใช้วันเริ่ม/สิ้นสุดกับ API และแบ่งหน้าภายใต้ตัวกรองเดียวกัน |
-| ส่งออก JSON ข้อมูลตารางสำหรับ owner | ผ่านใน development | รัง/สมาชิกทั้งหมด ผลผลิต/การตรวจตามช่วงวันที่ สูงสุด 10,000 รายการต่อประเภท; **ไม่รวมไฟล์รูป R2** |
+| ส่งออก JSON ข้อมูลตารางสำหรับ owner | ผ่านใน development | รวม audit และ photo manifest แต่ไม่รวม binary รูป; สูงสุด 10,000 รายการต่อประเภท |
 | การตรวจรังพร้อมเปลี่ยนสถานะ หรือคงสถานะเดิม | ผ่าน smoke test | การอัปเดตสถานะและสร้างบันทึกอยู่ใน SQL statement เดียว |
 | ป้าย QR และสแกนกล้อง | unit + Playwright mock API | ป้ายใหม่เก็บ URL บน origin เดียวกันและสแกนป้ายเก่าแบบรหัสได้; ยังต้องทดสอบกล้อง/เครื่องพิมพ์บนอุปกรณ์จริง |
 | ย่อภาพถ่ายก่อนอัปโหลด | ผ่าน unit test | ต้นฉบับสูงสุด 10 MB; ส่ง JPEG สูงสุด 2 MB; ต้องทดสอบภาพจากกล้องจริง |
@@ -36,7 +36,7 @@
 2. Archive/restore รัง owner-only ผ่าน Neon development แล้ว; ยังต้องตรวจบน staging และตัดสินใจนโยบายเก็บไฟล์รูปเก่าหลังเปลี่ยนรูป
 3. ตรวจ repo เก่าเพื่อย้าย endpoint/รูปแบบข้อมูลอากาศ และเพิ่มข้อมูลจริงพร้อม fallback ที่ไม่แสดงข้อมูลปลอม
 4. เตรียมตัวนำเข้าข้อมูลแบบ dry-run จาก export ที่ไม่ใช่ production; ตรวจ mapping/จำนวน/รูปก่อนนำเข้า Neon development และ staging
-5. เพิ่มกระบวนการสำรองและกู้คืนไฟล์รูป R2 แยกจาก JSON พร้อมตรวจความครบถ้วนของทั้งสองส่วน; ประเมิน cursor pagination เมื่อข้อมูลมากหรือเขียนพร้อมกันบ่อย
+5. สำรอง/กู้คืน JSON, CSV, audit และไฟล์รูปมีสคริปต์แล้ว; ค้างทดสอบวงจรจริงจนกว่าจะมี development R2 bucket/S3 credentials ที่จำกัดขอบเขต; ประเมิน cursor pagination เมื่อข้อมูลมากหรือเขียนพร้อมกันบ่อย
 6. เพิ่ม E2E บน staging สำหรับ owner/staff, การเพิ่ม/แก้ไข/ลบข้อมูล, อัปโหลดรูป, ปิดสิทธิ์ทีม และลิงก์รายละเอียดจาก QR โดยใช้ข้อมูลทดสอบที่ลบได้
 7. ทดสอบบนมือถือจริง: กล้อง QR, รูปจากกล้อง, สิทธิ์กล้อง, สัญญาณอ่อน, การพิมพ์ A4 และขนาดจอ 320–1440 px
 8. ตรวจเนื้อหาสาธารณะกับเจ้าของฟาร์ม ใช้รูปเดิมไปก่อน และปล่อยสินค้า/อบรม/สมุดพกกับช่องทางติดต่อเมื่อยืนยันเนื้อหาจริง; วัด Lighthouse Mobile
@@ -116,3 +116,17 @@
 
 - ไม่มี migration ใน Phase นี้
 - วิดีโอต้นฉบับย้ายไป `assets/source-videos/` เพื่อเก็บคืนได้แต่ไม่ส่งไปกับ static assets; PWA ยังลงทะเบียนได้ แต่ปิด offline navigation fallback เพราะ HTML แต่ละ public route prerender แยกและไม่มี offline read requirement
+
+## Phase 5: Backup & Restore (ข้อกำหนดล่าสุด)
+
+| ความสามารถ | ระดับที่ผ่าน | ข้อจำกัด |
+| --- | --- | --- |
+| Export JSON ของข้อมูลพร้อม audit และ photo manifest | unit + smoke local (Neon development) | ไม่มีรูปจริงใน export JSON |
+| CSV แยกไฟล์ต่อประเภทและรวม ZIP พร้อม UTF-8 BOM | unit + Playwright mock API | ยังไม่ได้ลองเปิดใน Microsoft Excel จริง |
+| คำนวณ/ตรวจ SHA-256; R2 upload ใหม่เก็บ hash metadata และ export รองรับรูปเก่าด้วยการอ่าน R2 | unit + smoke ที่ไม่มีรูป | R2 development ของจริงยังไม่ได้ทดสอบ |
+| `backup.ts`, `restore.ts --dry-run/--apply` จำกัด Neon development และ bucket `metafarm-next-media-dev` | TypeScript + unit สำหรับ manifest/checksum + code review | ยังไม่ผ่านวงจร backup → restore เพราะเครื่องยังไม่มี S3 credentials และ bucket development; ไม่เขียน staging/production |
+
+- manifest ระบุจำนวนรัง ผลผลิต ตรวจ ทีม audit และรูป; restore ตรวจ checksum ไฟล์ JSON และรูปก่อนเริ่มเขียน, ปฏิเสธฐานข้อมูลที่ไม่ว่าง, ตรวจภาพหลังอัปโหลดกลับ และเทียบจำนวนหลัง restore
+- หากการ restore จริงล้มเหลวหลังเริ่มเขียน ต้องสร้าง development branch/bucket ใหม่; script ไม่พยายามลบหรือเขียนทับข้อมูลที่มีอยู่
+- ไม่มี migration ใน Phase นี้
+

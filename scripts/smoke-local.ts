@@ -21,9 +21,11 @@ type HiveDetail = {
 type Page = { items: CreatedRecord[]; nextOffset: number | null };
 type ExportData = {
   photosIncluded: boolean;
+  photos: Array<{ inspectionId: string; key: string; mime: string; size: number; sha256: string }>;
   hives: HiveRecord[];
   harvests: Array<CreatedRecord & { hiveId: string }>;
   inspections: Array<CreatedRecord & { hiveId: string }>;
+  audit: Array<CreatedRecord & { entityId: string; action: string }>;
 };
 type AuditPage = { items: Array<{ action: string; entity: string; entityId: string }> };
 type Summary = { summary: { hiveCount: number; harvestCount: number; inspectionCount: number; totalHoneyMl: number } };
@@ -140,9 +142,11 @@ try {
     `/export?from=${today}&to=${today}`,
   );
   assert.equal(exported.photosIncluded, false);
+  assert.ok(Array.isArray(exported.photos));
   assert.ok(exported.hives.some((item) => item.id === hiveId));
   assert.equal(exported.harvests.filter((item) => item.hiveId === hiveId).length, 1);
   assert.equal(exported.inspections.filter((item) => item.hiveId === hiveId).length, 2);
+  assert.ok(exported.audit.some((item) => item.entityId === hiveId && item.action === "create"));
   await request<{ ok: true }>(`/harvests/${createdHarvest.id}`, "DELETE");
   const afterDelete = await request<Page>(`/harvests?hiveId=${hiveId}`);
   assert.equal(afterDelete.items.length, 0);

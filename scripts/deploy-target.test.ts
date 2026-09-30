@@ -8,6 +8,16 @@ const staging = {
 const stagingUrl = 'postgresql://user:password@ep-summer-frost-b38pqku0-pooler.c-4.ap-southeast-1.aws.neon.tech/neondb';
 
 describe('deploy target guard', () => {
+  it('allows only a dedicated development database and bucket for restore', () => {
+    const config = {
+      name: 'metafarm-next-dev',
+      r2_buckets: [{ binding: 'MEDIA', bucket_name: 'metafarm-next-media-dev' }]
+    };
+    const developmentUrl = 'postgresql://user:password@ep-twilight-pine-b3svkey5-pooler.c-4.ap-southeast-1.aws.neon.tech/neondb';
+    expect(() => verifyDeployTarget('development', developmentUrl, config)).not.toThrow();
+    expect(() => verifyDeployTarget('development', stagingUrl, config)).toThrow('Neon hostname ไม่ตรง');
+    expect(() => verifyDeployTarget('development', developmentUrl, staging)).toThrow('Worker name ไม่ตรง');
+  });
   it('accepts matching staging resources', () => {
     expect(() => verifyDeployTarget('staging', stagingUrl, staging)).not.toThrow();
   });

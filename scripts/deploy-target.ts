@@ -1,4 +1,4 @@
-export type DeployTarget = 'staging' | 'production';
+export type DeployTarget = 'development' | 'staging' | 'production';
 
 type WorkerConfig = {
   name?: unknown;
@@ -6,6 +6,11 @@ type WorkerConfig = {
 };
 
 const expected = {
+  development: {
+    databaseHost: 'ep-twilight-pine-b3svkey5-pooler.c-4.ap-southeast-1.aws.neon.tech',
+    worker: 'metafarm-next-dev',
+    bucket: 'metafarm-next-media-dev'
+  },
   staging: {
     databaseHost: 'ep-summer-frost-b38pqku0-pooler.c-4.ap-southeast-1.aws.neon.tech',
     worker: 'metafarm-next-staging',

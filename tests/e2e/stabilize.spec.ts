@@ -1,4 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
+import { readFile } from "node:fs/promises";
+import { strFromU8, unzipSync } from "fflate";
 import { th } from "../../src/i18n/th";
 
 const hiveId = "4a5b4ee4-179f-4c52-833d-e96f5f87ebd9";
@@ -339,4 +341,22 @@ test("บันทึกตรวจสำเร็จแต่รูปอั�
   await expect(page.getByRole("button", { name: th.admin.retryPhotoUpload })).toHaveCount(0);
   expect(creates).toBe(1);
   expect(uploads).toBe(2);
+});
+
+test("เจ้าของดาวน์โหลด CSV ZIP ที่มี BOM และไฟล์แยกตามประเภท", async ({ page }) => {
+  await mockApi(page);
+  await page.route("**/api/export*", (route) => route.fulfill({ json: {
+    formatVersion: 1, exportedAt: new Date().toISOString(), photosIncluded: false,
+    hives: [{ id: hiveId, code: hive.code, name: "รังทดสอบ" }],
+    harvests: [], inspections: [], team: [], audit: [], photos: [],
+  } }));
+  await page.goto("/admin#team");
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: th.admin.exportCsvButton }).click();
+  const download = await downloadPromise;
+  const bytes = new Uint8Array(await readFile((await download.path())!));
+  const files = unzipSync(bytes);
+  expect(Object.keys(files).sort()).toEqual(["audit.csv", "harvests.csv", "hives.csv", "inspections.csv", "photos.csv", "team.csv"]);
+  expect(Array.from(files["hives.csv"].slice(0, 3))).toEqual([0xef, 0xbb, 0xbf]);
+  expect(strFromU8(files["hives.csv"])).toContain("รังทดสอบ");
 });
