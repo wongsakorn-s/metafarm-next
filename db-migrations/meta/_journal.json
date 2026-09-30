@@ -8,6 +8,27 @@
       "when": 1790555323771,
       "tag": "0000_easy_excalibur",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790701745023,
+      "tag": "0001_pink_legion",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790703982693,
+      "tag": "0002_living_sleepwalker",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790705279300,
+      "tag": "0003_cool_inhumans",
+      "breakpoints": true
     }
   ]
 }

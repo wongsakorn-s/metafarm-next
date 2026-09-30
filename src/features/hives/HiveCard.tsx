@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { Button, ButtonLink } from "../../components/ui/Button";
+import { Badge } from "../../components/ui/Badge";
 import { Card } from "../../components/ui/Card";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Sheet } from "../../components/ui/Sheet";
 import type { Hive } from "../../lib/api";
 import { th } from "../../i18n/th";
@@ -11,12 +13,19 @@ export function HiveCard({
   hive,
   busy,
   onUpdate,
+  owner,
+  onArchive,
+  onRestore,
 }: {
   hive: Hive;
   busy: boolean;
-  onUpdate: (event: FormEvent<HTMLFormElement>, hive: Hive) => void;
+  onUpdate: (event: FormEvent<HTMLFormElement>, hive: Hive) => Promise<boolean>;
+  owner: boolean;
+  onArchive: (id: string) => Promise<boolean>;
+  onRestore: (id: string) => Promise<boolean>;
 }) {
   const [open, setOpen] = useState(false);
+  const [confirming, setConfirming] = useState<"archive" | "restore" | null>(null);
   return (
     <>
       <Card>
@@ -29,7 +38,10 @@ export function HiveCard({
               {hive.species || "—"} · {hive.location || "—"}
             </p>
           </div>
-          <StatusBadge status={hive.status} />
+          <div className="flex flex-wrap gap-2">
+            <StatusBadge status={hive.status} />
+            {hive.archivedAt && <Badge tone="warning" icon="▣">{th.admin.archivedHive}</Badge>}
+          </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
           <ButtonLink href={`/admin/hives/${hive.id}`} variant="secondary">
@@ -38,6 +50,11 @@ export function HiveCard({
           <Button variant="outline" onClick={() => setOpen(true)}>
             {th.admin.editData}
           </Button>
+          {owner && (
+            <Button variant="outline" disabled={busy} onClick={() => setConfirming(hive.archivedAt ? "restore" : "archive")}>
+              {hive.archivedAt ? th.admin.restoreHive : th.admin.archiveHive}
+            </Button>
+          )}
         </div>
       </Card>
       <Sheet
@@ -48,9 +65,24 @@ export function HiveCard({
         <HiveForm
           hive={hive}
           busy={busy}
-          onSubmit={(event) => onUpdate(event, hive)}
+          onSubmit={async (event) => {
+            if (await onUpdate(event, hive)) setOpen(false);
+          }}
         />
       </Sheet>
+      <ConfirmDialog
+        open={confirming !== null}
+        title={confirming === "archive" ? th.admin.confirmArchiveHive : th.admin.confirmRestoreHive}
+        description={confirming === "archive" ? th.admin.archiveHiveWarning : th.admin.restoreHiveWarning}
+        confirmLabel={confirming === "archive" ? th.admin.archiveHive : th.admin.restoreHive}
+        destructive={confirming === "archive"}
+        busy={busy}
+        onClose={() => setConfirming(null)}
+        onConfirm={async () => {
+          const done = confirming === "archive" ? await onArchive(hive.id) : await onRestore(hive.id);
+          if (done) setConfirming(null);
+        }}
+      />
     </>
   );
 }

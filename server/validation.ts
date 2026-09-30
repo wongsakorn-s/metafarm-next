@@ -25,6 +25,24 @@ export const harvestInput = z.object({
   propolisG: z.number().min(0).max(1_000_000),
 });
 
+export const harvestUpdate = harvestInput;
+
+export const inspectionUpdate = z.object({
+  inspectedAt: day,
+  status,
+  notes: z.string().trim().max(2000).nullable(),
+});
+
+export const auditQuery = z.object({
+  entity: z.enum(["hive", "harvest", "inspection", "team"]).optional(),
+  entityId: z.string().trim().min(1).max(254).optional(),
+  offset: z.coerce.number().int().min(0).max(100_000).default(0),
+});
+
+export const archivedHiveQuery = z.object({
+  includeArchived: z.enum(["true", "false"]).optional(),
+});
+
 export const inspectionInput = z.object({
   hiveId: z.uuid(),
   inspectedAt: day,

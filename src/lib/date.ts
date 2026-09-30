@@ -11,6 +11,14 @@ const displayDateFormatter = new Intl.DateTimeFormat("th-TH", {
   month: "short",
   year: "numeric",
 });
+const displayDateTimeFormatter = new Intl.DateTimeFormat("th-TH", {
+  timeZone: "Asia/Bangkok",
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
 const displayMonthFormatter = new Intl.DateTimeFormat("th-TH", {
   timeZone: "UTC",
   month: "long",
@@ -43,6 +51,11 @@ export function farmDate(date = new Date()): string {
 export function formatFarmDate(value: string): string {
   const date = dateOnly(value);
   return date ? displayDateFormatter.format(date) : value;
+}
+
+export function formatFarmDateTime(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : displayDateTimeFormatter.format(date);
 }
 
 export function formatFarmMonth(value: string): string {

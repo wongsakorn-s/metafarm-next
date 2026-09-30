@@ -1,8 +1,8 @@
 import "./verify-development-db";
 import assert from "node:assert/strict";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { getDb } from "../server/db";
-import { harvests, hives, inspections } from "../server/db/schema";
+import { auditLogs, harvests, hives, idempotencyKeys, inspections, staff } from "../server/db/schema";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL ไม่พร้อมใช้งาน");
@@ -10,6 +10,7 @@ const db = getDb(databaseUrl);
 const baseUrl = "http://127.0.0.1:8787/api";
 const today = new Date().toISOString().slice(0, 10);
 const code = `SMOKE-${crypto.randomUUID().slice(0, 8)}`.toUpperCase();
+const teamEmail = `smoke-${crypto.randomUUID()}@example.invalid`;
 
 type CreatedRecord = { id: string };
 type HiveRecord = CreatedRecord & { code: string; status: string };
@@ -20,15 +21,22 @@ type HiveDetail = {
 type Page = { items: CreatedRecord[]; nextOffset: number | null };
 type ExportData = {
   photosIncluded: boolean;
+  photos: Array<{ inspectionId: string; key: string; mime: string; size: number; sha256: string }>;
   hives: HiveRecord[];
   harvests: Array<CreatedRecord & { hiveId: string }>;
   inspections: Array<CreatedRecord & { hiveId: string }>;
+  audit: Array<CreatedRecord & { entityId: string; action: string }>;
 };
+type AuditPage = { items: Array<{ action: string; entity: string; entityId: string }> };
+type Summary = { summary: { hiveCount: number; harvestCount: number; inspectionCount: number; totalHoneyMl: number } };
 
-async function request<T>(path: string, method = "GET", body?: object): Promise<T> {
+async function request<T>(path: string, method = "GET", body?: object, key?: string): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, {
     method,
-    headers: body ? { "Content-Type": "application/json" } : undefined,
+    headers: {
+      ...(body ? { "Content-Type": "application/json" } : {}),
+      ...(key ? { "Idempotency-Key": key } : {}),
+    },
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!response.ok) {
@@ -38,7 +46,10 @@ async function request<T>(path: string, method = "GET", body?: object): Promise<
 }
 
 let hiveId: string | undefined;
+const recordIds: string[] = [];
+const retryKeys: string[] = [];
 try {
+  const baseline = await request<Summary>(`/dashboard?month=${today.slice(0, 7)}`);
   const hive = await request<HiveRecord>("/hives", "POST", {
     code,
     name: "Smoke test",
@@ -46,30 +57,64 @@ try {
   hiveId = hive.id;
   assert.equal(hive.status, "Normal");
 
-  const firstInspection = await request<CreatedRecord>("/inspections", "POST", {
+  const inspectionKey = crypto.randomUUID();
+  retryKeys.push(inspectionKey);
+  const inspectionInput = {
     hiveId,
     inspectedAt: today,
     status: "Strong",
     notes: "temporary smoke test",
-  });
+  };
+  const firstInspection = await request<CreatedRecord>("/inspections", "POST", inspectionInput, inspectionKey);
   assert.ok(firstInspection.id);
+  const retriedInspection = await request<CreatedRecord>("/inspections", "POST", inspectionInput, inspectionKey);
+  assert.equal(retriedInspection.id, firstInspection.id);
+  recordIds.push(firstInspection.id);
+  const secondInspectionKey = crypto.randomUUID();
+  retryKeys.push(secondInspectionKey);
   const secondInspection = await request<CreatedRecord>("/inspections", "POST", {
     hiveId,
     inspectedAt: today,
-  });
+  }, secondInspectionKey);
   assert.ok(secondInspection.id);
-  await request<CreatedRecord>("/harvests", "POST", {
+  recordIds.push(secondInspection.id);
+  const harvestKey = crypto.randomUUID();
+  retryKeys.push(harvestKey);
+  const harvestInput = {
     hiveId,
     harvestedAt: today,
     honeyMl: 100,
     propolisG: 1.5,
+  };
+  const createdHarvest = await request<CreatedRecord>("/harvests", "POST", harvestInput, harvestKey);
+  const retriedHarvest = await request<CreatedRecord>("/harvests", "POST", harvestInput, harvestKey);
+  assert.equal(retriedHarvest.id, createdHarvest.id);
+  recordIds.push(createdHarvest.id);
+  const conflictingRetry = await fetch(`${baseUrl}/harvests`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": harvestKey },
+    body: JSON.stringify({ ...harvestInput, honeyMl: 999 }),
   });
+  assert.equal(conflictingRetry.status, 409);
+  const editedHarvest = await request<CreatedRecord & { honeyMl: number }>(
+    `/harvests/${createdHarvest.id}`,
+    "PATCH",
+    { hiveId, harvestedAt: today, honeyMl: 125, propolisG: 1.5 },
+  );
+  assert.equal(editedHarvest.honeyMl, 125);
+  const editedInspection = await request<CreatedRecord & { notes: string; status: string }>(
+    `/inspections/${firstInspection.id}`, "PATCH", {
+      inspectedAt: today, status: "Weak", notes: "edited smoke test",
+    },
+  );
+  assert.equal(editedInspection.status, "Weak");
+  assert.equal(editedInspection.notes, "edited smoke test");
 
   const match = await request<CreatedRecord>(`/hives/by-code/${code}`);
   assert.equal(match.id, hiveId);
   const detail = await request<HiveDetail>(`/hives/${hiveId}`);
   assert.equal(detail.hive.status, "Strong");
-  assert.equal(detail.totals.honeyMl, 100);
+  assert.equal(detail.totals.honeyMl, 125);
   assert.equal(detail.totals.propolisG, 1.5);
   assert.equal(detail.totals.inspectionCount, 2);
   const harvestPage = await request<Page>(`/harvests?hiveId=${hiveId}&limit=1`);
@@ -97,12 +142,66 @@ try {
     `/export?from=${today}&to=${today}`,
   );
   assert.equal(exported.photosIncluded, false);
+  assert.ok(Array.isArray(exported.photos));
   assert.ok(exported.hives.some((item) => item.id === hiveId));
   assert.equal(exported.harvests.filter((item) => item.hiveId === hiveId).length, 1);
   assert.equal(exported.inspections.filter((item) => item.hiveId === hiveId).length, 2);
+  assert.ok(exported.audit.some((item) => item.entityId === hiveId && item.action === "create"));
+  await request<{ ok: true }>(`/harvests/${createdHarvest.id}`, "DELETE");
+  const afterDelete = await request<Page>(`/harvests?hiveId=${hiveId}`);
+  assert.equal(afterDelete.items.length, 0);
+  await request<{ ok: true }>(`/inspections/${firstInspection.id}`, "DELETE");
+  const afterInspectionDelete = await request<Page>(`/inspections?hiveId=${hiveId}`);
+  assert.equal(afterInspectionDelete.items.length, 1);
+  const summaryAfterDelete = await request<Summary>(`/dashboard?month=${today.slice(0, 7)}`);
+  assert.equal(summaryAfterDelete.summary.harvestCount, baseline.summary.harvestCount);
+  assert.equal(summaryAfterDelete.summary.totalHoneyMl, baseline.summary.totalHoneyMl);
+  assert.equal(summaryAfterDelete.summary.inspectionCount, baseline.summary.inspectionCount + 1);
+  const harvestAudit = await request<AuditPage>(`/audit?entity=harvest&entityId=${createdHarvest.id}`);
+  assert.deepEqual(new Set(harvestAudit.items.map((item) => item.action)),
+    new Set(["create", "update", "delete"]));
+  const inspectionAudit = await request<AuditPage>(`/audit?entity=inspection&entityId=${firstInspection.id}`);
+  assert.deepEqual(new Set(inspectionAudit.items.map((item) => item.action)),
+    new Set(["create", "update", "delete"]));
+  await request(`/hives/${hiveId}/archive`, "POST");
+  const archived = await request<Array<{ id: string; archivedAt: string | null }>>("/hives?includeArchived=true");
+  assert.ok(archived.some((item) => item.id === hiveId && item.archivedAt));
+  const activeHives = await request<Array<{ id: string }>>("/hives");
+  assert.ok(!activeHives.some((item) => item.id === hiveId));
+  const summaryAfterArchive = await request<Summary>(`/dashboard?month=${today.slice(0, 7)}`);
+  assert.equal(summaryAfterArchive.summary.hiveCount, baseline.summary.hiveCount + 1);
+  assert.equal(summaryAfterArchive.summary.harvestCount, baseline.summary.harvestCount);
+  const rejected = await fetch(`${baseUrl}/harvests`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ hiveId, harvestedAt: today, honeyMl: 1, propolisG: 0 }),
+  });
+  assert.equal(rejected.status, 409);
+  const rejectedInspection = await fetch(`${baseUrl}/inspections`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ hiveId, inspectedAt: today, notes: "should reject" }),
+  });
+  assert.equal(rejectedInspection.status, 409);
+  await request(`/hives/${hiveId}/restore`, "POST");
+  const hiveAudit = await request<AuditPage>(`/audit?entity=hive&entityId=${hiveId}`);
+  assert.ok(hiveAudit.items.some((item) => item.action === "archive"));
+  assert.ok(hiveAudit.items.some((item) => item.action === "restore"));
+  await request("/team", "POST", { email: teamEmail });
+  await request(`/team/${encodeURIComponent(teamEmail)}`, "PATCH", { active: false });
+  const teamAudit = await request<AuditPage>(`/audit?entity=team&entityId=${encodeURIComponent(teamEmail)}`);
+  assert.ok(teamAudit.items.some((item) => item.action === "create"));
+  assert.ok(teamAudit.items.some((item) => item.action === "update"));
+  if (!process.env.OPENWEATHER_API_KEY) {
+    const weatherResponse = await fetch(`${baseUrl}/weather/current`);
+    assert.equal(weatherResponse.status, 503);
+  }
   console.log("Local API smoke test passed");
 } finally {
   if (hiveId) {
+    await db.delete(idempotencyKeys).where(inArray(idempotencyKeys.key, retryKeys));
+    await db.delete(auditLogs).where(inArray(auditLogs.entityId, [hiveId, ...recordIds, teamEmail]));
+    await db.delete(staff).where(eq(staff.email, teamEmail));
     await db.delete(inspections).where(eq(inspections.hiveId, hiveId));
     await db.delete(harvests).where(eq(harvests.hiveId, hiveId));
     await db.delete(hives).where(eq(hives.id, hiveId));

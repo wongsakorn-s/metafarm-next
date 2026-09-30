@@ -1,8 +1,9 @@
+@import "@fontsource-variable/noto-sans-thai-looped/wght.css";
 @import "tailwindcss";
 
 @theme {
   --font-sans:
-    "Noto Sans Thai Looped", "Noto Sans Thai", "Segoe UI", sans-serif;
+    "Noto Sans Thai Looped Variable", "Noto Sans Thai", "Segoe UI", sans-serif;
   --color-honey-50: #fff9ed;
   --color-honey-100: #fff0cd;
   --color-honey-200: #ffda88;
@@ -129,5 +130,21 @@ p {
   body:has(.qr-print) #main-content {
     max-width: none;
     padding: 0;
+  }
+  .qr-print {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-rows: 34mm;
+    gap: 0;
+  }
+  .qr-print > * {
+    height: 34mm;
+    break-inside: avoid;
+    border: 1px solid #ddd;
+    padding: 1mm 2mm;
+  }
+  .qr-print svg {
+    width: 23mm;
+    height: 23mm;
   }
 }

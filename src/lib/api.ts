@@ -1,3 +1,5 @@
+import { th } from "../i18n/th";
+
 export type Staff = { email: string; role: "owner" | "staff" };
 export type Hive = {
   id: string;
@@ -6,13 +8,22 @@ export type Hive = {
   species: string | null;
   location: string | null;
   status: string;
+  archivedAt: string | null;
 };
+export type RecordPermissions = { canEdit: boolean; canDelete: boolean };
 export type Harvest = {
   id: string;
   hiveId: string;
   harvestedAt: string;
   honeyMl: number;
   propolisG: number;
+  createdByEmail: string | null;
+  createdAt: string;
+  createdBy: string | null;
+  updatedAt: string | null;
+  updatedBy: string | null;
+  deletedAt: string | null;
+  permissions: RecordPermissions;
 };
 export type Inspection = {
   id: string;
@@ -21,6 +32,22 @@ export type Inspection = {
   status: string;
   notes: string | null;
   imageKey: string | null;
+  createdAt: string;
+  createdBy: string | null;
+  updatedAt: string | null;
+  updatedBy: string | null;
+  deletedAt: string | null;
+  permissions: RecordPermissions;
+};
+export type AuditEntry = {
+  id: string;
+  actorEmail: string;
+  action: "create" | "update" | "delete" | "archive" | "restore";
+  entity: "hive" | "harvest" | "inspection" | "team";
+  entityId: string;
+  before: unknown;
+  after: unknown;
+  createdAt: string;
 };
 export type HistoryPage<T> = { items: T[]; nextOffset: number | null };
 export type HiveDetailData = {
@@ -55,24 +82,51 @@ export type Dashboard = {
   inspections: Inspection[];
   team: TeamMember[];
 };
+export type Weather = {
+  timestamp: string;
+  tempC: number;
+  humidity: number;
+  locationName: string;
+  description: string;
+  icon: string;
+  windSpeedMps: number | null;
+  cloudinessPct: number | null;
+  sourceName: "OpenWeather" | "OpenWeather (cached)";
+};
 
 export async function api<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`/api${path}`, {
-    ...options,
-    headers: {
-      ...(options?.body && !(options.body instanceof Blob)
-        ? { "Content-Type": "application/json" }
-        : {}),
-      ...options?.headers,
-    },
-    credentials: "same-origin",
-    cache: "no-store",
-  });
-  if (!response.ok) {
-    const result = (await response.json().catch(() => null)) as {
-      error?: string;
-    } | null;
-    throw new Error(result?.error ?? `HTTP ${response.status}`);
+  let response: Response;
+  try {
+    response = await fetch(`/api${path}`, {
+      ...options,
+      headers: {
+        ...(options?.body && !(options.body instanceof Blob)
+          ? { "Content-Type": "application/json" }
+          : {}),
+        ...options?.headers,
+      },
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+  } catch {
+    throw new Error(th.common.networkError);
   }
-  return response.json() as Promise<T>;
+  if (response.status === 401) throw new Error(th.common.sessionExpired);
+  if (response.status === 403) throw new Error(th.common.accessDenied);
+  if (!response.headers.get("content-type")?.includes("application/json"))
+    throw new Error(th.common.sessionExpired);
+  let result: unknown;
+  try {
+    result = await response.json();
+  } catch {
+    throw new Error(th.common.invalidResponse);
+  }
+  if (!response.ok) {
+    const error =
+      result && typeof result === "object" && "error" in result
+        ? result.error
+        : null;
+    throw new Error(typeof error === "string" ? error : th.common.invalidResponse);
+  }
+  return result as T;
 }

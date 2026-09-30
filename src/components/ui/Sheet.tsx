@@ -22,6 +22,8 @@ export function Sheet({
 }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
     if (!open) return;
     const previousFocus =
@@ -32,7 +34,7 @@ export function Sheet({
     document.body.style.overflow = "hidden";
     closeRef.current?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") onCloseRef.current();
       if (event.key !== "Tab") return;
       const focusables = dialogRef.current?.querySelectorAll<HTMLElement>(
         'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
@@ -54,7 +56,7 @@ export function Sheet({
       document.body.style.overflow = previousOverflow;
       previousFocus?.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[70]">
@@ -70,7 +72,7 @@ export function Sheet({
         role={dialogRole}
         aria-modal="true"
         aria-label={title}
-        className={`absolute flex flex-col overflow-hidden bg-white shadow-float ${side === "right" ? "inset-y-0 right-0 h-full w-full max-w-md" : "inset-x-0 bottom-0 max-h-[94dvh] rounded-t-hero sm:mx-auto sm:max-w-xl"}`}
+        className={`absolute flex flex-col overflow-hidden bg-white shadow-float ${side === "right" ? "inset-y-0 right-0 h-full w-full max-w-md" : "inset-x-0 bottom-0 max-h-[85dvh] rounded-t-hero sm:mx-auto sm:max-w-xl"}`}
       >
         <div className="flex items-center justify-between border-b border-stone-200 px-5 py-4">
           <h2 className="text-lg font-bold">{title}</h2>

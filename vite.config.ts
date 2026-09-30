@@ -29,7 +29,7 @@ export default defineConfig({
       },
       workbox: {
         navigateFallback: "/index.html",
-        navigateFallbackDenylist: [/^\/admin/, /^\/api/, /^\/health(?:\/|$)/],
+        navigateFallbackDenylist: [/^\//],
         runtimeCaching: [{ urlPattern: /\/api\//, handler: "NetworkOnly" }],
       },
     }),

@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Button, ButtonLink } from "../ui/Button";
 import { Sheet } from "../ui/Sheet";
 import { th } from "../../i18n/th";
+import { farmContact } from "../../content/farm";
 import { publicNavigationRoutes } from "../../pages/publicRoutes";
 
 export function PublicLayout({
@@ -107,7 +108,7 @@ export function PublicLayout({
               className="h-12 w-auto"
             />
             <p className="mt-4 font-bold text-leaf-800">{th.public.footer}</p>
-            <p className="mt-2 text-sm text-stone-600">{th.public.location}</p>
+            <p className="mt-2 text-sm text-stone-600">{farmContact.location}</p>
           </div>
           <div>
             <h2 className="text-base font-bold">{th.public.explore}</h2>

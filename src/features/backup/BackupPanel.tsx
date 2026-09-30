@@ -13,7 +13,7 @@ export function BackupPanel() {
   const [error, setError] = useState("");
   const [downloaded, setDownloaded] = useState(false);
 
-  async function download() {
+  async function download(format: "json" | "csv") {
     if (from && to && from > to) {
       setError(th.admin.invalidDateRange);
       return;
@@ -36,11 +36,17 @@ export function BackupPanel() {
       if (!response.headers.get("Content-Type")?.includes("application/json")) {
         throw new Error(th.admin.exportSessionExpired);
       }
-      const blob = await response.blob();
+      let blob: Blob;
+      if (format === "json") {
+        blob = await response.blob();
+      } else {
+        const { csvZip, parseExportData } = await import("../../lib/exportCsv");
+        blob = new Blob([new Uint8Array(csvZip(parseExportData(await response.json()))).buffer], { type: "application/zip" });
+      }
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `metafarm-records-${farmDate()}.json`;
+      link.download = `metafarm-records-${farmDate()}.${format === "json" ? "json" : "zip"}`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -81,9 +87,14 @@ export function BackupPanel() {
           )}
         </Field>
       </div>
-      <Button type="button" disabled={busy} onClick={download} className="mt-4">
-        {busy ? th.admin.exporting : th.admin.exportButton}
-      </Button>
+      <div className="mt-4 flex flex-wrap gap-3">
+        <Button type="button" disabled={busy} onClick={() => void download("json")}>
+          {busy ? th.admin.exporting : th.admin.exportButton}
+        </Button>
+        <Button type="button" variant="outline" disabled={busy} onClick={() => void download("csv")}>
+          {th.admin.exportCsvButton}
+        </Button>
+      </div>
       {error && <p role="alert" className="mt-3 text-sm text-danger-700">{error}</p>}
       {downloaded && <p role="status" className="mt-3 text-sm text-success-700">{th.admin.exportStarted}</p>}
     </Card>

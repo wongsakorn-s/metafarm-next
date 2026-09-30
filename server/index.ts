@@ -1,22 +1,30 @@
 import { env } from "cloudflare:workers";
 import { httpServerHandler } from "cloudflare:node";
 import express from "express";
-import { and, desc, eq, gte, lt, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lt, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "./db";
-import { harvests, hives, inspections, staff } from "./db/schema";
+import { auditLogs, harvests, hives, inspections, staff } from "./db/schema";
 import { getStaff, type AppEnv, type StaffSession } from "./auth";
 import {
   harvestInput,
+  harvestUpdate,
+  auditQuery,
+  archivedHiveQuery,
   hiveInput,
   hiveUpdate,
   inspectionInput,
+  inspectionUpdate,
   teamInput,
 } from "./validation";
 import { handleError, HttpError, jsonBody, photoBody } from "./http";
 import { detectImageMime } from "./image";
 import { dateRangeQuery, historyQuery, pageResult } from "./pagination";
-import { requireOwner } from "./authorization";
+import { canEditHistoryRecord, historyPermissions, requireOwner } from "./authorization";
+import { getCurrentWeather } from "./weather";
+import { auditedChange, noPreviousRecord } from "./audit";
+import { prepareIdempotency, replayAfterConflict } from "./idempotency";
+import { photoManifest, sha256Hex } from "./photo-manifest";
 
 const bindings = env as AppEnv;
 const app = express();
@@ -28,6 +36,9 @@ app.use((req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Permissions-Policy", "camera=(self), microphone=(), geolocation=()");
+  res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  res.setHeader("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
   res.on("finish", () =>
     console.info("API request", {
       requestId,
@@ -53,15 +64,33 @@ function session(res: express.Response): StaffSession {
 
 async function assertHive(hiveId: string) {
   const [hive] = await database()
-    .select({ id: hives.id })
+    .select({ id: hives.id, archivedAt: hives.archivedAt })
     .from(hives)
     .where(eq(hives.id, hiveId))
     .limit(1);
   if (!hive) throw new HttpError(404, "ไม่พบรังที่เลือก");
+  if (hive.archivedAt) throw new HttpError(409, "รังนี้ถูกเก็บถาวรแล้ว ไม่สามารถเพิ่มบันทึกใหม่ได้");
+}
+
+function withHistoryPermissions<T extends {
+  createdBy: string | null;
+  createdAt: Date;
+  createdByEmail?: string | null;
+}>(row: T, actor: StaffSession) {
+  return {
+    ...row,
+    permissions: historyPermissions(actor, row.createdBy ?? row.createdByEmail ?? null, row.createdAt),
+  };
 }
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
-app.get("/health/ready", async (_req, res) => {
+app.get("/health/ready", async (req, res) => {
+  const host = req.get("host") ?? "invalid.local";
+  const headers = new Headers();
+  const token = req.get("Cf-Access-Jwt-Assertion");
+  if (token) headers.set("Cf-Access-Jwt-Assertion", token);
+  const user = await getStaff(new Request(new URL(req.originalUrl, `https://${host}`), { headers }), bindings);
+  if (!user) throw new HttpError(403, "ไม่มีสิทธิ์ตรวจสถานะระบบ");
   await database().execute(sql`select 1`);
   res.json({ ok: true });
 });
@@ -70,11 +99,11 @@ app.use("/api", async (req, res, next) => {
   try {
     res.setHeader("Cache-Control", "private, no-store");
     const host = req.get("host") ?? "invalid.local";
-    const url = new URL(req.originalUrl, `https://${host}`);
-    const headers = new Headers();
-    const token = req.get("Cf-Access-Jwt-Assertion");
-    if (token) headers.set("Cf-Access-Jwt-Assertion", token);
-    const user = await getStaff(new Request(url, { headers }), bindings);
+    const user = await getStaff(new Request(new URL(req.originalUrl, `https://${host}`), {
+      headers: req.get("Cf-Access-Jwt-Assertion")
+        ? { "Cf-Access-Jwt-Assertion": req.get("Cf-Access-Jwt-Assertion")! }
+        : undefined,
+    }), bindings);
     if (!user) throw new HttpError(403, "ไม่มีสิทธิ์เข้าถึงหลังบ้าน");
     res.locals.staff = user;
     next();
@@ -84,6 +113,10 @@ app.use("/api", async (req, res, next) => {
 });
 
 app.get("/api/me", (_req, res) => res.json(session(res)));
+
+app.get("/api/weather/current", async (_req, res) => {
+  res.json(await getCurrentWeather(bindings));
+});
 
 app.get("/api/dashboard", async (req, res) => {
   const db = database();
@@ -105,16 +138,19 @@ app.get("/api/dashboard", async (req, res) => {
     monthTotals,
     allHarvestTotals,
     inspectionTotals,
+    hiveTotals,
   ] = await Promise.all([
-    db.select().from(hives).orderBy(desc(hives.createdAt)),
+    db.select().from(hives).where(isNull(hives.archivedAt)).orderBy(desc(hives.createdAt)),
     db
       .select()
       .from(harvests)
+      .where(isNull(harvests.deletedAt))
       .orderBy(desc(harvests.harvestedAt), desc(harvests.createdAt))
       .limit(100),
     db
       .select()
       .from(inspections)
+      .where(isNull(inspections.deletedAt))
       .orderBy(desc(inspections.inspectedAt), desc(inspections.createdAt))
       .limit(100),
     session(res).role === "owner"
@@ -135,6 +171,7 @@ app.get("/api/dashboard", async (req, res) => {
         and(
           gte(harvests.harvestedAt, firstDay),
           lt(harvests.harvestedAt, nextMonth),
+          isNull(harvests.deletedAt),
         ),
       ),
     db
@@ -143,8 +180,10 @@ app.get("/api/dashboard", async (req, res) => {
         honeyMl: sql<string>`coalesce(sum(${harvests.honeyMl}), 0)`,
         propolisG: sql<string>`coalesce(sum(${harvests.propolisG}), 0)`,
       })
-      .from(harvests),
-    db.select({ count: sql<number>`count(*)::int` }).from(inspections),
+      .from(harvests)
+      .where(isNull(harvests.deletedAt)),
+    db.select({ count: sql<number>`count(*)::int` }).from(inspections).where(isNull(inspections.deletedAt)),
+    db.select({ count: sql<number>`count(*)::int` }).from(hives),
   ]);
   const hiveStatuses = { Strong: 0, Normal: 0, Weak: 0, Empty: 0 };
   for (const row of statusRows) {
@@ -156,7 +195,7 @@ app.get("/api/dashboard", async (req, res) => {
   const summary = {
     month,
     hiveStatuses,
-    hiveCount: hiveRows.length,
+    hiveCount: hiveTotals[0].count,
     harvestCount: allHarvests.count,
     inspectionCount: inspectionTotals[0].count,
     totalHoneyMl: Number(allHarvests.honeyMl),
@@ -170,8 +209,8 @@ app.get("/api/dashboard", async (req, res) => {
     staff: session(res),
     summary,
     hives: hiveRows,
-    harvests: harvestRows,
-    inspections: inspectionRows,
+    harvests: harvestRows.map((row) => withHistoryPermissions(row, session(res))),
+    inspections: inspectionRows.map((row) => withHistoryPermissions(row, session(res))),
     team: teamRows,
   });
 });
@@ -181,7 +220,7 @@ app.get("/api/export", async (req, res) => {
   const { from, to } = dateRangeQuery.parse(req.query);
   const db = database();
   const maxRows = 10_000;
-  const [hiveRows, harvestRows, inspectionRows, teamRows] = await Promise.all([
+  const [hiveRows, harvestRows, inspectionRows, teamRows, auditRows] = await Promise.all([
     db.select().from(hives).orderBy(hives.code).limit(maxRows + 1),
     db
       .select()
@@ -190,6 +229,7 @@ app.get("/api/export", async (req, res) => {
         and(
           from ? gte(harvests.harvestedAt, from) : undefined,
           to ? lte(harvests.harvestedAt, to) : undefined,
+          isNull(harvests.deletedAt),
         ),
       )
       .orderBy(harvests.harvestedAt, harvests.id)
@@ -201,15 +241,18 @@ app.get("/api/export", async (req, res) => {
         and(
           from ? gte(inspections.inspectedAt, from) : undefined,
           to ? lte(inspections.inspectedAt, to) : undefined,
+          isNull(inspections.deletedAt),
         ),
       )
       .orderBy(inspections.inspectedAt, inspections.id)
       .limit(maxRows + 1),
     db.select().from(staff).orderBy(staff.email).limit(maxRows + 1),
+    db.select().from(auditLogs).orderBy(auditLogs.createdAt, auditLogs.id).limit(maxRows + 1),
   ]);
-  if ([hiveRows, harvestRows, inspectionRows, teamRows].some((rows) => rows.length > maxRows)) {
+  if ([hiveRows, harvestRows, inspectionRows, teamRows, auditRows].some((rows) => rows.length > maxRows)) {
     throw new HttpError(413, "ข้อมูลเกิน 10,000 รายการต่อประเภท กรุณาเลือกช่วงวันที่ให้สั้นลง");
   }
+  const photos = await photoManifest(bindings.MEDIA, inspectionRows);
   res.setHeader(
     "Content-Disposition",
     `attachment; filename="metafarm-records-${new Date().toISOString().slice(0, 10)}.json"`,
@@ -219,19 +262,55 @@ app.get("/api/export", async (req, res) => {
     exportedAt: new Date().toISOString(),
     dateRange: { from: from ?? null, to: to ?? null },
     photosIncluded: false,
+    photos,
     hives: hiveRows,
     harvests: harvestRows,
     inspections: inspectionRows,
     team: teamRows,
+    audit: auditRows,
   });
+});
+
+app.get("/api/audit", async (req, res) => {
+  requireOwner(session(res));
+  const { entity, entityId, offset } = auditQuery.parse(req.query);
+  const rows = await database()
+    .select()
+    .from(auditLogs)
+    .where(and(
+      entity ? eq(auditLogs.entity, entity) : undefined,
+      entityId ? eq(auditLogs.entityId, entityId) : undefined,
+    ))
+    .orderBy(desc(auditLogs.createdAt), desc(auditLogs.id))
+    .limit(51)
+    .offset(offset);
+  res.json(pageResult(rows, offset, 50));
+});
+
+app.get("/api/hives", async (req, res) => {
+  const { includeArchived } = archivedHiveQuery.parse(req.query);
+  if (includeArchived === "true") requireOwner(session(res));
+  const rows = await database()
+    .select()
+    .from(hives)
+    .where(includeArchived === "true" ? undefined : isNull(hives.archivedAt))
+    .orderBy(desc(hives.createdAt));
+  res.json(rows);
 });
 
 app.post("/api/hives", async (req, res) => {
   const input = hiveInput.parse(req.body);
-  const [hive] = await database()
-    .insert(hives)
-    .values({ id: crypto.randomUUID(), ...input })
-    .returning();
+  const id = crypto.randomUUID();
+  const db = database();
+  await auditedChange(db, {
+    before: noPreviousRecord,
+    change: sql`INSERT INTO hives (id, code, name, species, location, status)
+      VALUES (${id}::uuid, ${input.code}, ${input.name}, ${input.species ?? null},
+        ${input.location ?? null}, ${input.status}) RETURNING *`,
+    actorEmail: session(res).email,
+    action: "create", entity: "hive", entityId: id,
+  });
+  const [hive] = await db.select().from(hives).where(eq(hives.id, id));
   res.status(201).json(hive);
 });
 
@@ -260,13 +339,13 @@ app.get("/api/hives/:id", async (req, res) => {
     db
       .select()
       .from(harvests)
-      .where(eq(harvests.hiveId, id))
+      .where(and(eq(harvests.hiveId, id), isNull(harvests.deletedAt)))
       .orderBy(desc(harvests.harvestedAt), desc(harvests.createdAt))
       .limit(100),
     db
       .select()
       .from(inspections)
-      .where(eq(inspections.hiveId, id))
+      .where(and(eq(inspections.hiveId, id), isNull(inspections.deletedAt)))
       .orderBy(desc(inspections.inspectedAt), desc(inspections.createdAt))
       .limit(100),
     db
@@ -276,17 +355,17 @@ app.get("/api/hives/:id", async (req, res) => {
         propolisG: sql<string>`coalesce(sum(${harvests.propolisG}), 0)`,
       })
       .from(harvests)
-      .where(eq(harvests.hiveId, id)),
+      .where(and(eq(harvests.hiveId, id), isNull(harvests.deletedAt))),
     db
       .select({ count: sql<number>`count(*)::int` })
       .from(inspections)
-      .where(eq(inspections.hiveId, id)),
+      .where(and(eq(inspections.hiveId, id), isNull(inspections.deletedAt))),
   ]);
   if (!hiveRows[0]) throw new HttpError(404, "ไม่พบรัง");
   res.json({
     hive: hiveRows[0],
-    harvests: harvestRows,
-    inspections: inspectionRows,
+    harvests: harvestRows.map((row) => withHistoryPermissions(row, session(res))),
+    inspections: inspectionRows.map((row) => withHistoryPermissions(row, session(res))),
     totals: {
       harvestCount: harvestTotals[0].count,
       honeyMl: Number(harvestTotals[0].honeyMl),
@@ -306,6 +385,7 @@ app.get("/api/harvests", async (req, res) => {
         hiveId ? eq(harvests.hiveId, hiveId) : undefined,
         from ? gte(harvests.harvestedAt, from) : undefined,
         to ? lte(harvests.harvestedAt, to) : undefined,
+        isNull(harvests.deletedAt),
       ),
     )
     .orderBy(
@@ -315,7 +395,7 @@ app.get("/api/harvests", async (req, res) => {
     )
     .limit(limit + 1)
     .offset(offset);
-  res.json(pageResult(rows, offset, limit));
+  res.json(pageResult(rows.map((row) => withHistoryPermissions(row, session(res))), offset, limit));
 });
 
 app.get("/api/inspections", async (req, res) => {
@@ -328,6 +408,7 @@ app.get("/api/inspections", async (req, res) => {
         hiveId ? eq(inspections.hiveId, hiveId) : undefined,
         from ? gte(inspections.inspectedAt, from) : undefined,
         to ? lte(inspections.inspectedAt, to) : undefined,
+        isNull(inspections.deletedAt),
       ),
     )
     .orderBy(
@@ -337,49 +418,259 @@ app.get("/api/inspections", async (req, res) => {
     )
     .limit(limit + 1)
     .offset(offset);
-  res.json(pageResult(rows, offset, limit));
+  res.json(pageResult(rows.map((row) => withHistoryPermissions(row, session(res))), offset, limit));
 });
 
 app.patch("/api/hives/:id", async (req, res) => {
   const id = z.uuid().parse(req.params.id);
   const input = hiveUpdate.parse(req.body);
-  const [hive] = await database()
-    .update(hives)
-    .set(input)
-    .where(eq(hives.id, id))
-    .returning();
-  if (!hive) throw new HttpError(404, "ไม่พบรัง");
+  const db = database();
+  const changed = await auditedChange(db, {
+    before: sql`SELECT id, to_jsonb(h) AS payload FROM hives h WHERE id = ${id}::uuid FOR UPDATE`,
+    change: sql`UPDATE hives SET name = ${input.name}, species = ${input.species ?? null},
+      location = ${input.location ?? null}, status = ${input.status}
+      WHERE id IN (SELECT id FROM before_record) RETURNING *`,
+    actorEmail: session(res).email,
+    action: "update", entity: "hive", entityId: id,
+  });
+  if (!changed) throw new HttpError(404, "ไม่พบรัง");
+  const [hive] = await db.select().from(hives).where(eq(hives.id, id));
+  res.json(hive);
+});
+
+app.post("/api/hives/:id/archive", async (req, res) => {
+  requireOwner(session(res));
+  const id = z.uuid().parse(req.params.id);
+  const db = database();
+  const changed = await auditedChange(db, {
+    before: sql`SELECT id, to_jsonb(h) AS payload FROM hives h
+      WHERE id = ${id}::uuid AND archived_at IS NULL FOR UPDATE`,
+    change: sql`UPDATE hives SET archived_at = now()
+      WHERE id IN (SELECT id FROM before_record) RETURNING *`,
+    actorEmail: session(res).email,
+    action: "archive", entity: "hive", entityId: id,
+  });
+  if (!changed) throw new HttpError(409, "รังนี้ถูกเก็บถาวรแล้วหรือไม่พบรัง");
+  const [hive] = await db.select().from(hives).where(eq(hives.id, id));
+  res.json(hive);
+});
+
+app.post("/api/hives/:id/restore", async (req, res) => {
+  requireOwner(session(res));
+  const id = z.uuid().parse(req.params.id);
+  const db = database();
+  const changed = await auditedChange(db, {
+    before: sql`SELECT id, to_jsonb(h) AS payload FROM hives h
+      WHERE id = ${id}::uuid AND archived_at IS NOT NULL FOR UPDATE`,
+    change: sql`UPDATE hives SET archived_at = NULL
+      WHERE id IN (SELECT id FROM before_record) RETURNING *`,
+    actorEmail: session(res).email,
+    action: "restore", entity: "hive", entityId: id,
+  });
+  if (!changed) throw new HttpError(409, "รังนี้ยังใช้งานอยู่หรือไม่พบรัง");
+  const [hive] = await db.select().from(hives).where(eq(hives.id, id));
   res.json(hive);
 });
 
 app.post("/api/harvests", async (req, res) => {
   const input = harvestInput.parse(req.body);
+  const db = database();
+  const actor = session(res);
+  const replay = await prepareIdempotency(req, db, actor.email, "create-harvest", input);
+  if (replay.previousResponse) return void res.status(201).json(replay.previousResponse);
   await assertHive(input.hiveId);
-  const [record] = await database()
-    .insert(harvests)
-    .values({ id: crypto.randomUUID(), ...input })
-    .returning();
-  res.status(201).json(record);
+  const id = crypto.randomUUID();
+  const result = await db.execute(sql`
+    WITH eligible_hive AS MATERIALIZED (
+      SELECT id FROM hives h WHERE id = ${input.hiveId}::uuid
+        AND archived_at IS NULL FOR SHARE
+    ),
+    claimed AS (
+      INSERT INTO idempotency_keys (key, actor, operation, request_hash, response, created_at)
+      SELECT ${replay.key}::uuid, ${actor.email}, ${replay.operation}, ${replay.requestHash},
+        jsonb_build_object(
+          'id', ${id}::text, 'hiveId', ${input.hiveId}::text,
+          'harvestedAt', ${input.harvestedAt}::text,
+          'honeyMl', ${input.honeyMl}::integer, 'propolisG', ${input.propolisG}::real,
+          'createdByEmail', ${actor.email}::text, 'createdBy', ${actor.email}::text,
+          'createdAt', ${replay.createdAt}::text, 'updatedAt', NULL, 'updatedBy', NULL,
+          'deletedAt', NULL,
+          'permissions', jsonb_build_object('canEdit', true, 'canDelete', ${actor.role === "owner"}::boolean)
+        ), ${replay.createdAt}::timestamptz
+      FROM eligible_hive WHERE true
+      ON CONFLICT (key) DO NOTHING RETURNING response
+    ),
+    created AS (
+      INSERT INTO harvests
+        (id, hive_id, harvested_at, honey_ml, propolis_g, created_by,
+          created_by_email, created_at)
+      SELECT ${id}::uuid, eligible_hive.id, ${input.harvestedAt}::date,
+        ${input.honeyMl}, ${input.propolisG}, ${actor.email}, ${actor.email},
+        ${replay.createdAt}::timestamptz
+      FROM eligible_hive CROSS JOIN claimed RETURNING *
+    ),
+    logged AS (
+      INSERT INTO audit_logs (id, actor_email, action, entity, entity_id, before, after)
+      SELECT ${crypto.randomUUID()}::uuid, ${actor.email}, 'create', 'harvest',
+        ${id}, NULL::jsonb, to_jsonb(created) FROM created RETURNING id
+    )
+    SELECT claimed.response FROM claimed CROSS JOIN logged
+  `);
+  if (result.rows[0]) return void res.status(201).json(result.rows[0].response);
+  await assertHive(input.hiveId);
+  res.status(201).json(await replayAfterConflict(db, replay));
+});
+
+app.patch("/api/harvests/:id", async (req, res) => {
+  const id = z.uuid().parse(req.params.id);
+  const input = harvestUpdate.parse(req.body);
+  const db = database();
+  const [current] = await db.select().from(harvests)
+    .where(and(eq(harvests.id, id), isNull(harvests.deletedAt))).limit(1);
+  if (!current) throw new HttpError(404, "ไม่พบรายการผลผลิต");
+  const actor = session(res);
+  if (!canEditHistoryRecord(actor, current.createdBy ?? current.createdByEmail, current.createdAt)) {
+    throw new HttpError(403, "ไม่มีสิทธิ์แก้ไขรายการผลผลิตนี้");
+  }
+  if (input.hiveId !== current.hiveId)
+    throw new HttpError(400, "ไม่สามารถย้ายผลผลิตไปยังรังอื่นได้");
+  const staffRule = actor.role === "staff"
+    ? sql`AND lower(coalesce(created_by, created_by_email)) = lower(${actor.email})
+      AND created_at BETWEEN now() - interval '24 hours' AND now()`
+    : sql``;
+  const changed = await auditedChange(db, {
+    before: sql`SELECT id, to_jsonb(h) AS payload FROM harvests h
+      WHERE id = ${id}::uuid AND deleted_at IS NULL FOR UPDATE`,
+    change: sql`UPDATE harvests SET harvested_at = ${input.harvestedAt}::date,
+      honey_ml = ${input.honeyMl}, propolis_g = ${input.propolisG},
+      updated_at = now(), updated_by = ${actor.email}
+      WHERE id IN (SELECT id FROM before_record) ${staffRule} RETURNING *`,
+    actorEmail: actor.email,
+    action: "update", entity: "harvest", entityId: id,
+  });
+  if (!changed) throw new HttpError(403, "หมดเวลาแก้ไขรายการผลผลิตนี้");
+  const [updated] = await db.select().from(harvests).where(eq(harvests.id, id));
+  res.json(withHistoryPermissions(updated, actor));
+});
+
+app.delete("/api/harvests/:id", async (req, res) => {
+  requireOwner(session(res));
+  const id = z.uuid().parse(req.params.id);
+  const changed = await auditedChange(database(), {
+    before: sql`SELECT id, to_jsonb(h) AS payload FROM harvests h
+      WHERE id = ${id}::uuid AND deleted_at IS NULL FOR UPDATE`,
+    change: sql`UPDATE harvests SET deleted_at = now(),
+      updated_at = now(), updated_by = ${session(res).email}
+      WHERE id IN (SELECT id FROM before_record) RETURNING *`,
+    actorEmail: session(res).email,
+    action: "delete", entity: "harvest", entityId: id,
+  });
+  if (!changed) throw new HttpError(404, "ไม่พบรายการผลผลิต");
+  res.json({ ok: true });
 });
 
 app.post("/api/inspections", async (req, res) => {
   const input = inspectionInput.parse(req.body);
-  const result = await database().execute(sql`
-    WITH current_hive AS (
-      UPDATE hives
-      SET status = COALESCE(${input.status ?? null}, status)
-      WHERE id = ${input.hiveId}::uuid
-      RETURNING id, status
+  const db = database();
+  const actor = session(res);
+  const replay = await prepareIdempotency(req, db, actor.email, "create-inspection", input);
+  if (replay.previousResponse) return void res.status(201).json(replay.previousResponse);
+  await assertHive(input.hiveId);
+  const id = crypto.randomUUID();
+  const result = await db.execute(sql`
+    WITH previous_hive AS MATERIALIZED (
+      SELECT id, status, to_jsonb(h) AS payload FROM hives h
+      WHERE id = ${input.hiveId}::uuid AND archived_at IS NULL FOR UPDATE
+    ),
+    claimed AS (
+      INSERT INTO idempotency_keys (key, actor, operation, request_hash, response, created_at)
+      SELECT ${replay.key}::uuid, ${actor.email}, ${replay.operation}, ${replay.requestHash},
+        jsonb_build_object(
+          'id', ${id}::text, 'hiveId', ${input.hiveId}::text,
+          'inspectedAt', ${input.inspectedAt}::text,
+          'notes', ${input.notes ?? null}::text,
+          'status', COALESCE(${input.status ?? null}::text, previous_hive.status),
+          'imageKey', NULL, 'imageMime', NULL,
+          'createdAt', ${replay.createdAt}::text, 'createdBy', ${actor.email}::text,
+          'updatedAt', NULL, 'updatedBy', NULL, 'deletedAt', NULL,
+          'permissions', jsonb_build_object('canEdit', true, 'canDelete', ${actor.role === "owner"}::boolean)
+        ), ${replay.createdAt}::timestamptz
+      FROM previous_hive WHERE true
+      ON CONFLICT (key) DO NOTHING RETURNING response
+    ),
+    changed_hive AS (
+      UPDATE hives SET status = COALESCE(${input.status ?? null}, status)
+      WHERE id IN (SELECT id FROM previous_hive) AND EXISTS (SELECT 1 FROM claimed)
+      RETURNING *
+    ),
+    created AS (
+      INSERT INTO inspections (id, hive_id, inspected_at, notes, status, created_by, created_at)
+      SELECT ${id}::uuid, id, ${input.inspectedAt}::date, ${input.notes ?? null},
+        status, ${actor.email}, ${replay.createdAt}::timestamptz
+      FROM changed_hive CROSS JOIN claimed RETURNING *
+    ),
+    logged_hive AS (
+      INSERT INTO audit_logs (id, actor_email, action, entity, entity_id, before, after)
+      SELECT ${crypto.randomUUID()}::uuid, ${actor.email}, 'update', 'hive',
+        ${input.hiveId}, previous_hive.payload, to_jsonb(changed_hive)
+      FROM changed_hive CROSS JOIN previous_hive RETURNING id
+    ),
+    logged_inspection AS (
+      INSERT INTO audit_logs (id, actor_email, action, entity, entity_id, before, after)
+      SELECT ${crypto.randomUUID()}::uuid, ${actor.email}, 'create', 'inspection',
+        ${id}, NULL::jsonb, to_jsonb(created)
+      FROM created RETURNING id
     )
-    INSERT INTO inspections (id, hive_id, inspected_at, notes, status)
-    SELECT ${crypto.randomUUID()}::uuid, id, ${input.inspectedAt}::date, ${input.notes ?? null}, status
-    FROM current_hive
-    RETURNING id, hive_id AS "hiveId", inspected_at AS "inspectedAt", notes, status,
-      image_key AS "imageKey"
+    SELECT claimed.response FROM claimed CROSS JOIN logged_hive CROSS JOIN logged_inspection
   `);
-  const record = result.rows[0];
-  if (!record) throw new HttpError(404, "ไม่พบรังที่เลือก");
-  res.status(201).json(record);
+  if (result.rows[0]) return void res.status(201).json(result.rows[0].response);
+  await assertHive(input.hiveId);
+  res.status(201).json(await replayAfterConflict(db, replay));
+});
+
+app.patch("/api/inspections/:id", async (req, res) => {
+  const id = z.uuid().parse(req.params.id);
+  const input = inspectionUpdate.parse(req.body);
+  const db = database();
+  const [current] = await db.select().from(inspections)
+    .where(and(eq(inspections.id, id), isNull(inspections.deletedAt))).limit(1);
+  if (!current) throw new HttpError(404, "ไม่พบบันทึกการตรวจ");
+  const actor = session(res);
+  if (!canEditHistoryRecord(actor, current.createdBy, current.createdAt))
+    throw new HttpError(403, "ไม่มีสิทธิ์แก้ไขบันทึกการตรวจนี้");
+  const staffRule = actor.role === "staff"
+    ? sql`AND lower(created_by) = lower(${actor.email})
+      AND created_at BETWEEN now() - interval '24 hours' AND now()`
+    : sql``;
+  const changed = await auditedChange(db, {
+    before: sql`SELECT id, to_jsonb(i) AS payload FROM inspections i
+      WHERE id = ${id}::uuid AND deleted_at IS NULL FOR UPDATE`,
+    change: sql`UPDATE inspections SET inspected_at = ${input.inspectedAt}::date,
+      status = ${input.status}, notes = ${input.notes},
+      updated_at = now(), updated_by = ${actor.email}
+      WHERE id IN (SELECT id FROM before_record) ${staffRule} RETURNING *`,
+    actorEmail: actor.email,
+    action: "update", entity: "inspection", entityId: id,
+  });
+  if (!changed) throw new HttpError(403, "หมดเวลาแก้ไขบันทึกการตรวจนี้");
+  const [updated] = await db.select().from(inspections).where(eq(inspections.id, id));
+  res.json(withHistoryPermissions(updated, actor));
+});
+
+app.delete("/api/inspections/:id", async (req, res) => {
+  requireOwner(session(res));
+  const id = z.uuid().parse(req.params.id);
+  const changed = await auditedChange(database(), {
+    before: sql`SELECT id, to_jsonb(i) AS payload FROM inspections i
+      WHERE id = ${id}::uuid AND deleted_at IS NULL FOR UPDATE`,
+    change: sql`UPDATE inspections SET deleted_at = now(),
+      updated_at = now(), updated_by = ${session(res).email}
+      WHERE id IN (SELECT id FROM before_record) RETURNING *`,
+    actorEmail: session(res).email,
+    action: "delete", entity: "inspection", entityId: id,
+  });
+  if (!changed) throw new HttpError(404, "ไม่พบบันทึกการตรวจ");
+  res.json({ ok: true });
 });
 
 app.put("/api/inspections/:id/photo", photoBody, async (req, res) => {
@@ -397,23 +688,36 @@ app.put("/api/inspections/:id/photo", photoBody, async (req, res) => {
   const [record] = await db
     .select()
     .from(inspections)
-    .where(eq(inspections.id, id))
+    .where(and(eq(inspections.id, id), isNull(inspections.deletedAt)))
     .limit(1);
   if (!record) throw new HttpError(404, "ไม่พบบันทึกการตรวจ");
+  const actor = session(res);
+  if (!canEditHistoryRecord(actor, record.createdBy, record.createdAt))
+    throw new HttpError(403, "ไม่มีสิทธิ์แก้ไขรูปบันทึกการตรวจนี้");
+  const staffRule = actor.role === "staff"
+    ? sql`AND lower(created_by) = lower(${actor.email})
+      AND created_at BETWEEN now() - interval '24 hours' AND now()`
+    : sql``;
   const key = `inspections/${id}/${crypto.randomUUID()}`;
   await bindings.MEDIA.put(key, req.body, {
     httpMetadata: { contentType: mime },
+    customMetadata: { sha256: await sha256Hex(Uint8Array.from(req.body)) },
   });
   try {
-    await db
-      .update(inspections)
-      .set({ imageKey: key, imageMime: mime })
-      .where(eq(inspections.id, id));
+    const changed = await auditedChange(db, {
+      before: sql`SELECT id, to_jsonb(i) AS payload FROM inspections i
+        WHERE id = ${id}::uuid AND deleted_at IS NULL FOR UPDATE`,
+      change: sql`UPDATE inspections SET image_key = ${key}, image_mime = ${mime},
+        updated_at = now(), updated_by = ${session(res).email}
+        WHERE id IN (SELECT id FROM before_record) ${staffRule} RETURNING *`,
+      actorEmail: actor.email,
+      action: "update", entity: "inspection", entityId: id,
+    });
+    if (!changed) throw new HttpError(403, "หมดเวลาแก้ไขรูปบันทึกการตรวจนี้");
   } catch (cause) {
     await bindings.MEDIA.delete(key);
     throw cause;
   }
-  if (record.imageKey) await bindings.MEDIA.delete(record.imageKey);
   res.json({ ok: true });
 });
 
@@ -422,7 +726,7 @@ app.get("/api/inspections/:id/photo", async (req, res) => {
   const [record] = await database()
     .select({ key: inspections.imageKey, mime: inspections.imageMime })
     .from(inspections)
-    .where(eq(inspections.id, id))
+    .where(and(eq(inspections.id, id), isNull(inspections.deletedAt)))
     .limit(1);
   if (!record?.key || !record.mime) throw new HttpError(404, "ไม่พบรูป");
   const object = await bindings.MEDIA.get(record.key);
@@ -440,10 +744,16 @@ app.post("/api/team", async (req, res) => {
   const { email } = teamInput.parse(req.body);
   if (email === bindings.OWNER_EMAIL?.trim().toLowerCase())
     throw new HttpError(400, "เจ้าของฟาร์มมีสิทธิ์อยู่แล้ว");
-  await database()
-    .insert(staff)
-    .values({ email, active: true })
-    .onConflictDoUpdate({ target: staff.email, set: { active: true } });
+  const db = database();
+  const [previous] = await db.select().from(staff).where(eq(staff.email, email)).limit(1);
+  await auditedChange(db, {
+    before: sql`SELECT (SELECT to_jsonb(s) FROM staff s
+      WHERE email = ${email} FOR UPDATE) AS payload`,
+    change: sql`INSERT INTO staff (email, active) VALUES (${email}, true)
+      ON CONFLICT (email) DO UPDATE SET active = true RETURNING *`,
+    actorEmail: session(res).email,
+    action: previous ? "update" : "create", entity: "team", entityId: email,
+  });
   res.status(201).json({ email, active: true });
 });
 
@@ -451,12 +761,17 @@ app.patch("/api/team/:email", async (req, res) => {
   requireOwner(session(res));
   const email = z.email().parse(req.params.email).toLowerCase();
   const { active } = z.object({ active: z.boolean() }).parse(req.body);
-  const [member] = await database()
-    .update(staff)
-    .set({ active })
-    .where(and(eq(staff.email, email), eq(staff.active, !active)))
-    .returning();
-  if (!member) throw new HttpError(404, "ไม่พบทีมงานหรือสถานะไม่เปลี่ยน");
+  const db = database();
+  const changed = await auditedChange(db, {
+    before: sql`SELECT email, to_jsonb(s) AS payload FROM staff s
+      WHERE email = ${email} AND active = ${!active} FOR UPDATE`,
+    change: sql`UPDATE staff SET active = ${active}
+      WHERE email IN (SELECT email FROM before_record) RETURNING *`,
+    actorEmail: session(res).email,
+    action: "update", entity: "team", entityId: email,
+  });
+  if (!changed) throw new HttpError(404, "ไม่พบทีมงานหรือสถานะไม่เปลี่ยน");
+  const [member] = await db.select().from(staff).where(eq(staff.email, email));
   res.json(member);
 });
 

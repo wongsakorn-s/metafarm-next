@@ -10,6 +10,10 @@ export type AppEnv = Env & {
   ACCESS_TEAM_DOMAIN?: string;
   ACCESS_AUD?: string;
   DEV_AUTH_EMAIL?: string;
+  OPENWEATHER_API_KEY?: string;
+  FARM_LAT?: string;
+  FARM_LON?: string;
+  FARM_LOCATION_NAME_TH?: string;
 };
 
 const keySets = new Map<string, ReturnType<typeof createRemoteJWKSet>>();

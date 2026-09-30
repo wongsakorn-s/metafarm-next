@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { harvestInput, hiveInput, inspectionInput } from "./validation";
+import { auditQuery, archivedHiveQuery, harvestInput, harvestUpdate, hiveInput, inspectionInput, inspectionUpdate } from "./validation";
 
 describe("API input validation", () => {
   it("normalizes hive codes", () => {
@@ -16,6 +16,25 @@ describe("API input validation", () => {
         harvestedAt: "2026-09-28",
         honeyMl: -1,
         propolisG: 0,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("validates historical harvest changes", () => {
+    expect(
+      harvestUpdate.safeParse({
+        hiveId: crypto.randomUUID(),
+        harvestedAt: "2026-09-30",
+        honeyMl: 10,
+        propolisG: 0.5,
+      }).success,
+    ).toBe(true);
+    expect(
+      harvestUpdate.safeParse({
+        hiveId: crypto.randomUUID(),
+        harvestedAt: "2026-02-30",
+        honeyMl: 10,
+        propolisG: 0.5,
       }).success,
     ).toBe(false);
   });
@@ -37,5 +56,19 @@ describe("API input validation", () => {
         inspectedAt: "2026-09-29",
       }).status,
     ).toBeUndefined();
+  });
+
+  it("validates historical inspection edits", () => {
+    expect(inspectionUpdate.safeParse({ inspectedAt: "2026-09-30", status: "Weak", notes: "ตรวจแล้ว" }).success).toBe(true);
+    expect(inspectionUpdate.safeParse({ inspectedAt: "2026-02-30", status: "Weak", notes: null }).success).toBe(false);
+    expect(inspectionUpdate.safeParse({ inspectedAt: "2026-09-30", status: "Unknown", notes: null }).success).toBe(false);
+  });
+
+  it("bounds archive and audit query inputs", () => {
+    expect(archivedHiveQuery.parse({ includeArchived: "true" })).toEqual({ includeArchived: "true" });
+    expect(archivedHiveQuery.safeParse({ includeArchived: "yes" }).success).toBe(false);
+    expect(auditQuery.parse({ entity: "hive", entityId: crypto.randomUUID(), offset: "10" }).offset).toBe(10);
+    expect(auditQuery.safeParse({ entity: "other" }).success).toBe(false);
+    expect(auditQuery.safeParse({ offset: "-1" }).success).toBe(false);
   });
 });

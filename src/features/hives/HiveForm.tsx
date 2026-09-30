@@ -6,6 +6,7 @@ import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
 import { th } from "../../i18n/th";
 import type { Hive } from "../../lib/api";
+import { useOnlineStatus } from "../../lib/useOnlineStatus";
 
 export function HiveForm({
   hive,
@@ -16,6 +17,7 @@ export function HiveForm({
   busy: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const online = useOnlineStatus();
   return (
     <Card>
       <form onSubmit={onSubmit} className="space-y-4">
@@ -83,7 +85,8 @@ export function HiveForm({
         </Field>
         <Button
           type="submit"
-          disabled={busy}
+          disabled={busy || !online}
+          title={!online ? th.admin.offlineSaveDisabled : undefined}
           full
           className="sticky bottom-0 z-10 shadow-float lg:static lg:shadow-none"
         >
@@ -93,6 +96,7 @@ export function HiveForm({
               ? th.admin.saveEdit
               : th.admin.saveHive}
         </Button>
+        {!online && <p className="text-sm text-warning-700">{th.admin.offlineSaveDisabled}</p>}
       </form>
     </Card>
   );

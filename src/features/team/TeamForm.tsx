@@ -4,6 +4,7 @@ import { Card } from "../../components/ui/Card";
 import { Field } from "../../components/ui/Field";
 import { Input } from "../../components/ui/Input";
 import { th } from "../../i18n/th";
+import { useOnlineStatus } from "../../lib/useOnlineStatus";
 
 export function TeamForm({
   busy,
@@ -12,6 +13,7 @@ export function TeamForm({
   busy: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const online = useOnlineStatus();
   return (
     <Card>
       <form onSubmit={onSubmit} className="space-y-4">
@@ -30,12 +32,14 @@ export function TeamForm({
         </Field>
         <Button
           type="submit"
-          disabled={busy}
+          disabled={busy || !online}
+          title={!online ? th.admin.offlineSaveDisabled : undefined}
           full
           className="sticky bottom-0 z-10 shadow-float lg:static lg:shadow-none"
         >
           {busy ? th.common.saving : th.admin.grantAccess}
         </Button>
+        {!online && <p className="text-sm text-warning-700">{th.admin.offlineSaveDisabled}</p>}
         <p className="text-sm text-stone-600">{th.admin.accessHint}</p>
       </form>
     </Card>

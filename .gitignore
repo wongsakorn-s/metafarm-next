@@ -10,3 +10,6 @@ dist/
 .dev.vars
 worker-configuration.d.ts
 *.tsbuildinfo
+test-results/
+playwright-report/
+backups/

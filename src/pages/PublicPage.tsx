@@ -15,8 +15,8 @@ const descriptions: Record<string, string> = {
   "/contact": th.public.contactIntro,
 };
 
-export function PublicPage() {
-  const path = resolvePublicPath(window.location.pathname);
+export function PublicPage({ initialPath }: { initialPath?: string }) {
+  const path = resolvePublicPath(initialPath ?? window.location.pathname);
   const title =
     publicRoutes.find((route) => route.path === path)?.label ??
     th.public.nav.home;
@@ -25,6 +25,10 @@ export function PublicPage() {
     document
       .querySelector<HTMLMetaElement>('meta[name="description"]')
       ?.setAttribute("content", descriptions[path] ?? `${title} | MetaFarm`);
+    const robots = document.querySelector<HTMLMetaElement>('meta[name="robots"]') ?? document.createElement("meta");
+    robots.name = "robots";
+    robots.content = publicRoutes.find((route) => route.path === path)?.published ? "index,follow" : "noindex,nofollow";
+    if (!robots.isConnected) document.head.appendChild(robots);
   }, [path, title]);
 
   const page =

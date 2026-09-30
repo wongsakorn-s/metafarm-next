@@ -1,5 +1,13 @@
 # Deploy บน Free Tier
 
+> งาน Phase 1–6 รอบปัจจุบันห้ามแตะ production database/bucket และห้าม deploy production แม้ workflow เก่าจะรองรับการ deploy อยู่ ขั้นตอนด้านล่างเป็นบันทึกของระบบเดิม ไม่ใช่คำอนุมัติให้รันในรอบนี้
+
+## Migration Phase 2 และแนวทาง rollback
+
+`db-migrations/0002_living_sleepwalker.sql` เพิ่มคอลัมน์แบบ nullable และตาราง `audit_logs` พร้อมดัชนี ต้องรัน migration ก่อน deploy Worker เวอร์ชันที่อ่านคอลัมน์เหล่านี้ ใช้เฉพาะ Neon development หรือ staging branch ที่ผ่านตัวตรวจเป้าหมายเท่านั้น; production ต้องรออนุมัติแยก
+
+หาก Worker ใหม่มีปัญหา ให้หยุดการเขียนข้อมูลและแก้ Worker โดยคง schema ใหม่ไว้ก่อน อย่าย้อนเป็น Worker รุ่นเก่าตรง ๆ เพราะรุ่นเก่าไม่กรอง `deleted_at` และอาจทำให้รายการที่ลบไปกลับมาแสดง การย้อน schema จริงต้องสำรองทั้งฐานข้อมูลและ audit ก่อน แล้วจึงพิจารณา drop คอลัมน์/ตารางที่เพิ่มใน migration นี้โดยเจ้าของอนุมัติ เนื่องจากขั้นตอนนั้นทำลายประวัติการแก้ไขและข้อมูล soft delete
+
 การ deploy frontend และ Express API จบใน Cloudflare Workers ครั้งเดียว โดยใช้ Neon PostgreSQL เป็นฐานข้อมูลภายนอก หลังเตรียม Neon, R2, Access และ secrets ครั้งแรกแล้ว GitHub Actions `Deploy production` จะตรวจโค้ด → ทดสอบ → migrate PostgreSQL → build → deploy ใน workflow เดียว
 
 ## สถานะการเตรียมระบบ (29 กันยายน 2026)
@@ -76,6 +84,8 @@ Workflow `Deploy production` มีตัวตรวจเป้าหมาย
 
 ## เตรียมครั้งแรก
 
+ข้อมูลอากาศในหลังบ้านเรียก OpenWeather ตามระบบเดิมและ cache ผลตอบกลับ 5 นาที; หากไม่มี `OPENWEATHER_API_KEY` ระบบจะแสดงสถานะว่าไม่มีข้อมูลโดยไม่สร้างตัวเลขจำลอง ตั้งค่าเป็น Worker secret แยก staging/production เมื่อมี key ที่ได้รับอนุญาต ห้ามใส่ key ใน `wrangler.jsonc` หรือ commit ลง repo พิกัดตั้งต้นมาจาก config ในระบบเดิม และแก้ได้ด้วย `FARM_LAT`/`FARM_LON`/`FARM_LOCATION_NAME_TH`
+
 1. สร้างโปรเจกต์ Neon Free และคัดลอก PostgreSQL connection string แบบ `sslmode=require` เก็บเป็นความลับ อย่า commit ลง repo
 2. สร้างบัญชี Cloudflare และรัน `bunx wrangler login`
 3. เปิด R2 ใน Cloudflare dashboard และสร้าง private bucket: `bunx wrangler r2 bucket create metafarm-next-media` (R2 อาจต้องทำขั้นตอน billing และเกินโควตาแล้วอาจมีค่าใช้จ่าย)
@@ -89,8 +99,39 @@ Workflow `Deploy production` มีตัวตรวจเป้าหมาย
 
 - Cloudflare ฟรีมีโควตา Worker ต่อวัน ส่วน R2 ฟรีมีเพดาน และการเปิดใช้งานอาจต้องผูกบัตร ตรวจราคา/โควตาปัจจุบันก่อน production
 - Neon Free มีโควตา compute และ storage; เมื่อ idle อาจ scale to zero ทำให้ request แรกช้าขึ้น
-- หน้าเว็บผู้ชมเป็น React SPA (static) ขณะนี้ยังอยู่หลัง Access ทั้งหมด; เมื่อเปิดสาธารณะจะใช้งานได้โดยไม่ล็อกอิน แต่ถ้าต้องการ SEO ระดับสูงควรเพิ่ม prerender/SSR ในระยะต่อไป
+- หน้าเว็บผู้ชม prerender HTML สำหรับ route ที่เผยแพร่แล้ว แต่ production hostname ยังอยู่หลัง Access ทั้งหมด; ต้องปรับ Access ให้ครอบคลุมเฉพาะ `/admin*` และ `/api/*` ก่อน crawler หรือผู้ชมทั่วไปจะเข้าถึงได้
 - รูปใน R2 ไม่เปิด public; อ่านผ่าน API หลังตรวจ Access JWT และ role เท่านั้น
 - หน้า public ใช้เนื้อหาจากโปรเจกต์เดิมแล้ว แต่ข้อมูลจริง/ข้อความสุขภาพ/สิทธิ์สื่อยังต้องตรวจรับก่อนเผยแพร่เป็นเว็บไซต์ทางการ
 - ไม่มีการย้ายข้อมูลจากระบบเดิม ต้องวางแผนและทดสอบแยกต่างหาก
 - ก่อน migration ที่เปลี่ยน schema ใน production ให้สำรองฐานข้อมูลและมีแผน rollback
+
+## สำรองและกู้คืนข้อมูล (development)
+
+- หน้า Admin ของ owner ส่งออก JSON หรือ CSV ZIP ได้ โดยแยกไฟล์รัง ผลผลิต บันทึกตรวจ ทีม ประวัติ audit และ manifest รูป; CSV ใส่ UTF-8 BOM เพื่อเปิดภาษาไทยใน Excel ได้
+- JSON มี `photos` manifest พร้อม inspection ID, R2 key, MIME, ขนาด และ SHA-256; รูปจริงสำรองด้วย script เท่านั้น
+- แนะนำสำรองทุกวัน และก่อนรัน migration/release ทุกครั้ง เก็บสำเนาอย่างน้อยหนึ่งชุดนอกเครื่องที่รันแอป พร้อมทดสอบ restore เป็นระยะ
+
+ตั้งค่า R2 S3 API token ที่มีสิทธิ์เฉพาะ bucket development ใน `.dev.vars` โดยใช้ keys `CLOUDFLARE_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME=metafarm-next-media-dev`; ห้ามส่ง credentials ในแชตหรือ commit `.dev.vars`
+
+```powershell
+# ต้องมี local Worker ทำงานที่ 127.0.0.1:8787; script ตรวจ Neon development ก่อนอ่านข้อมูล
+bun run backup:dev
+
+# ตรวจ manifest, จำนวนแถว และ checksum ก่อนเขียนข้อมูล
+bun run restore:dev -- backups/<ชื่อโฟลเดอร์> --dry-run
+
+# ใช้เฉพาะ Neon development branch ว่างและ R2 development bucket ที่กำหนดไว้
+bun run restore:dev -- backups/<ชื่อโฟลเดอร์> --apply
+```
+
+`restore.ts` ปฏิเสธ branch ที่มีรัง/ผลผลิต/ตรวจ/ทีม/audit อยู่แล้ว และตรวจชื่อ Worker, hostname Neon, ชื่อ R2 bucket ก่อนเขียน การกู้คืนจะสร้างรายการและอัปโหลดรูปใน R2 ก่อนลงฐานข้อมูล; หากเกิดข้อผิดพลาดกลางทาง ให้หยุดและสร้าง development branch/bucket ใหม่ก่อนลองอีกครั้ง ห้ามใช้ script นี้กับ staging หรือ production
+
+## Quality gate ใน GitHub Actions
+
+workflow `CI` รัน generate types, typecheck, unit tests, build, Playwright และ axe บนทุก pull request/push โดย worker-integration job จะข้ามอย่างปลอดภัยจนกว่าจะตั้งค่า Neon branch แยกสำหรับ CI:
+
+- Secret `NEON_DATABASE_URL_CI`: connection string ของ branch CI เท่านั้น
+- Variable `NEON_CI_DATABASE_HOST`: hostname ที่ตรงกับ connection string และไม่ใช่ host ของ development, staging หรือ production
+
+เมื่อตั้งค่าแล้ว job จะรัน migration กับ branch CI ผ่าน guard, เปิด Worker local (ใช้ R2 emulator), ทำ smoke และ E2E กับ API จริงก่อนจบงาน ทั้งนี้ CI ไม่ deploy ไป staging หรือ production; ดูผลตรวจ security เพิ่มเติมใน `docs/security-review-phase-6.md`
+

@@ -1,7 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge } from "../../components/ui/Badge";
 import { ButtonLink } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
+import { farmStats, farmStory } from "../../content/farm";
+import { farmPictures } from "../../content/media";
+import { FarmImage } from "../../components/public/FarmImage";
 import { th } from "../../i18n/th";
 
 function allowAutoPlay() {
@@ -13,7 +16,8 @@ function allowAutoPlay() {
 }
 
 export function Home() {
-  const [autoPlay] = useState(allowAutoPlay);
+  const [autoPlay, setAutoPlay] = useState(false);
+  useEffect(() => setAutoPlay(allowAutoPlay()), []);
   return (
     <main id="main-content" tabIndex={-1}>
       <section className="bg-honey-50">
@@ -29,7 +33,7 @@ export function Home() {
               {th.public.homeLead}
             </p>
             <p className="mt-4 max-w-xl text-stone-700">
-              {th.public.homeStory[0]}
+              {farmStory[0]}
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
               <ButtonLink href="/contact" variant="secondary">
@@ -42,7 +46,7 @@ export function Home() {
           </div>
           <div className="overflow-hidden rounded-hero bg-stone-900 shadow-card">
             <video
-              poster="/videos/metafarm-poster.svg"
+              poster="/videos/metafarm-poster.webp"
               controls
               autoPlay={autoPlay}
               muted
@@ -52,7 +56,7 @@ export function Home() {
               aria-label={th.public.heroVideo}
               className="aspect-video w-full object-cover"
             >
-              <source src="/videos/metafarm_video.mp4" type="video/mp4" />
+              <source src="/videos/metafarm-optimized.mp4" type="video/mp4" />
             </video>
           </div>
         </div>
@@ -60,12 +64,12 @@ export function Home() {
       <section className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
         <h2 className="text-page font-black">{th.public.statsTitle}</h2>
         <div className="mt-4 max-w-3xl space-y-3 text-stone-700">
-          {th.public.homeStory.slice(1).map((paragraph) => (
+          {farmStory.slice(1).map((paragraph) => (
             <p key={paragraph}>{paragraph}</p>
           ))}
         </div>
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
-          {th.public.stats.map(([value, label]) => (
+          {farmStats.map(([value, label]) => (
             <Card key={value}>
               <p className="text-3xl font-black text-leaf-800">{value}</p>
               <p className="mt-2 text-stone-700">{label}</p>
@@ -76,12 +80,9 @@ export function Home() {
       <section className="bg-white">
         <div className="mx-auto grid max-w-7xl gap-8 px-4 py-14 sm:px-6 md:grid-cols-2 md:items-center lg:px-8">
           <div className="grid min-h-72 place-items-center rounded-hero bg-leaf-50 p-6">
-            <img
-              src="/pictures/Picture2.png"
+            <FarmImage
+              picture={farmPictures.beeFlower}
               alt={th.public.beeImageAlt}
-              width="396"
-              height="277"
-              loading="lazy"
               className="w-full max-w-[198px] rounded-card object-cover shadow-card"
             />
           </div>
@@ -110,20 +111,6 @@ export function Home() {
         >
           {th.public.learnMore} <span aria-hidden="true">→</span>
         </ButtonLink>
-      </section>
-      <section className="bg-leaf-50">
-        <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
-          <Badge tone="success">{th.public.trainingSection}</Badge>
-          <h2 className="mt-4 text-page font-black">
-            {th.public.trainingTitle}
-          </h2>
-          <p className="mt-4 max-w-2xl text-stone-700">
-            {th.public.trainingIntro}
-          </p>
-          <ButtonLink href="/stingless-bee" variant="outline" className="mt-6">
-            {th.public.readBee} <span aria-hidden="true">→</span>
-          </ButtonLink>
-        </div>
       </section>
       <section className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
         <div className="rounded-hero bg-leaf-800 p-7 text-white sm:p-10">
