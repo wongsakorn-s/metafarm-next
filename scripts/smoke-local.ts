@@ -163,6 +163,12 @@ try {
   await request<{ ok: true }>(`/harvests/${createdHarvest.id}`, "DELETE");
   const afterDelete = await request<Page>(`/harvests?hiveId=${hiveId}`);
   assert.equal(afterDelete.items.length, 0);
+  const retryAfterDelete = await fetch(`${baseUrl}/harvests`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": harvestKey },
+    body: JSON.stringify(harvestInput),
+  });
+  assert.equal(retryAfterDelete.status, 409);
   await request<{ ok: true }>(`/inspections/${firstInspection.id}`, "DELETE");
   const afterInspectionDelete = await request<Page>(`/inspections?hiveId=${hiveId}`);
   assert.equal(afterInspectionDelete.items.length, 1);

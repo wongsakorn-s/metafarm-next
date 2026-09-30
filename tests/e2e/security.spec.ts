@@ -13,3 +13,21 @@ test("Cloudflare Worker ส่ง security headers ให้ static และ AP
   const health = await request.get("/health/ready");
   expect(health.ok()).toBeTruthy();
 });
+
+test("หน้า public และหลังบ้านไม่ละเมิด Content Security Policy", async ({ page }) => {
+  test.skip(!process.env.E2E_BASE_URL, "ทดสอบเมื่อรันกับ local Worker เท่านั้น");
+  const violations: string[] = [];
+  page.on("console", (message) => {
+    if (message.text().includes("Content Security Policy")) violations.push(message.text());
+  });
+  await page.addInitScript(() => {
+    document.addEventListener("securitypolicyviolation", (event) =>
+      console.error(`Content Security Policy: ${event.violatedDirective} ${event.blockedURI}`));
+  });
+  for (const path of ["/", "/stingless-bee", "/stingless-bee-honey", "/contact", "/admin", "/admin#hives", "/admin#qr", "/admin#team"]) {
+    await page.goto(path);
+    await expect(page.locator("main")).toBeVisible();
+    await page.waitForLoadState("networkidle");
+  }
+  expect(violations).toEqual([]);
+});
