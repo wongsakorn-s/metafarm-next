@@ -35,7 +35,7 @@
 ตรวจเองด้วย wrangler, neonctl, git และสคริปต์ทดสอบบน development:
 
 - PR #3 (`fix/review-findings`) และ #4 (`fix/followups`) merge เข้า `main` แล้ว; branch เก่าทั้งหมดบนเครื่องและบน GitHub ถูกลบ เหลือเฉพาะ `main`
-- Worker staging `metafarm-next-staging` deploy ใหม่เมื่อ 1 ตุลาคม 2026 13:31 UTC (version `4202fa1f-ad75-4bcb-bdae-9b9188053df3`) และมี version จากการตั้ง secret `OPENWEATHER_API_KEY` เมื่อ 14:55 UTC; Worker production `metafarm-next` ยังเป็น deployment เดิมของ 28 กันยายน 2026 (version `bd9ccbb7-6f41-4ccc-9cf9-c885a7726b18`) จึงยังไม่ได้รับโค้ดจาก PR #3/#4 และยังไม่มี `OPENWEATHER_API_KEY`
+- Worker staging `metafarm-next-staging` deploy ใหม่เมื่อ 1 ตุลาคม 2026 13:31 UTC (version `4202fa1f-ad75-4bcb-bdae-9b9188053df3`) และมี version จากการตั้ง secret `OPENWEATHER_API_KEY` เมื่อ 14:55 UTC; Worker production `metafarm-next` ยังเป็น deployment เดิมของ 28 กันยายน 2026 (version `bd9ccbb7-6f41-4ccc-9cf9-c885a7726b18`) จึงยังไม่ได้รับโค้ดจาก PR #3/#4 โดยยังรับ traffic 100% จาก version นี้
 - Neon โปรเจกต์ `metafarm-next` (`aws-ap-southeast-1`, PostgreSQL 18) มี 3 branch ได้แก่ `production` (default), `staging`, `development` ทุกตัวสถานะ `ready`; compute 0.25–2 CU ทุก branch และสถานะ idle; ไม่มี IP allow list; ขนาด logical ประมาณ 32 MB ต่อ branch (production 31.98 MB, staging 32.08 MB, development 32.18 MB). ตรวจเฉพาะ metadata ผ่าน Neon API ยังไม่ได้เชื่อมต่อฐาน staging/production เพื่ออ่านข้อมูลหรือ migration (ตามข้อห้ามแตะ production รอบนี้)
 - Neon branch `development`: migration ครบ 4/4 ตรงกับ `db-migrations/`; ไม่มีรัง ผลผลิต บันทึกตรวจ หรือทีม; ลบ audit log ค้าง 8 แถวจาก smoke test เมื่อ 29 กันยายน 2026 ตามที่เจ้าของยืนยันแล้ว (เหลือ idempotency key เก่า 3 แถว ซึ่งหมดอายุเองใน 7 วัน)
 - สร้าง R2 bucket `metafarm-next-media-dev` แล้ว (APAC, private, ปิด r2.dev URL) และตั้ง R2 API token ที่จำกัดเฉพาะ bucket นี้ใน `.dev.vars` แล้ว
@@ -52,7 +52,7 @@
 
 ยังไม่ได้ทำ / ยังไม่ได้ทดสอบ:
 
-- ยังไม่ได้ตั้ง `OPENWEATHER_API_KEY` ใน Worker production (รอเจ้าของอนุมัติ เพราะ `wrangler secret put` จะ deploy production ทันที)
+- `OPENWEATHER_API_KEY` ของ Worker production สร้างเป็น version `8e59787e-e737-4b7a-851d-53c294409c94` ด้วย `wrangler versions secret put` เมื่อ 1 ตุลาคม 2026 15:15 UTC โดย **ยังไม่ได้ deploy** (production ยังรับ traffic จาก version `bd9ccbb7…` 100%); key จะมีผลเมื่อ deploy production ครั้งถัดไปผ่าน GitHub Actions หรือสั่ง `wrangler versions deploy` โดยเจ้าของ
 - ยังไม่ได้ทดสอบการอ่านรายการรูปแบบแบ่งหน้าเมื่อมีรูปเกิน 100 รูป และการลบรูปเก่าเมื่อเปลี่ยนรูปกับ R2 จริง
 - ยังไม่ได้ทดสอบ role `staff` แบบ end-to-end
 
