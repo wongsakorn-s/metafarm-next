@@ -30,6 +30,32 @@
 - แยก Access app `MetaFarm Next staging` ออกจาก `MetaFarm Next admin` แล้ว เพราะการรวมสอง hostname ใน app เดิมทำให้ callback หลังล็อกอินกลับไป hostname ผิด; app staging ครอบทั้ง hostname โดยใช้ policy `MetaFarm owner` เดิม และ Worker staging ใช้ AUD ใหม่
 - ตรวจแล้วว่า request ไม่ล็อกอินไปยัง `/`, `/admin`, `/api/me`, `/health`, `/icon.svg` ถูกส่งไป Access (`302`); บัญชีเจ้าของเปิด `/admin` ได้ และ `/api/me` ตอบ `role: owner`
 
+## สถานะล่าสุด (1 ตุลาคม 2026)
+
+ตรวจเองด้วย wrangler, neonctl, git และสคริปต์ทดสอบบน development:
+
+- PR #3 (`fix/review-findings`) และ #4 (`fix/followups`) merge เข้า `main` แล้ว; branch เก่าทั้งหมดบนเครื่องและบน GitHub ถูกลบ เหลือเฉพาะ `main`
+- Worker staging `metafarm-next-staging` deploy ใหม่เมื่อ 1 ตุลาคม 2026 13:31 UTC (version `4202fa1f-ad75-4bcb-bdae-9b9188053df3`) และมี version จากการตั้ง secret `OPENWEATHER_API_KEY` เมื่อ 14:55 UTC; Worker production `metafarm-next` ยังเป็น deployment เดิมของ 28 กันยายน 2026 (version `bd9ccbb7-6f41-4ccc-9cf9-c885a7726b18`) จึงยังไม่ได้รับโค้ดจาก PR #3/#4 และยังไม่มี `OPENWEATHER_API_KEY`
+- Neon โปรเจกต์ `metafarm-next` (`aws-ap-southeast-1`, PostgreSQL 18) มี 3 branch ได้แก่ `production` (default), `staging`, `development` ทุกตัวสถานะ `ready`; compute 0.25–2 CU ทุก branch และสถานะ idle; ไม่มี IP allow list; ขนาด logical ประมาณ 32 MB ต่อ branch (production 31.98 MB, staging 32.08 MB, development 32.18 MB). ตรวจเฉพาะ metadata ผ่าน Neon API ยังไม่ได้เชื่อมต่อฐาน staging/production เพื่ออ่านข้อมูลหรือ migration (ตามข้อห้ามแตะ production รอบนี้)
+- Neon branch `development`: migration ครบ 4/4 ตรงกับ `db-migrations/`; ไม่มีรัง ผลผลิต บันทึกตรวจ หรือทีม; ลบ audit log ค้าง 8 แถวจาก smoke test เมื่อ 29 กันยายน 2026 ตามที่เจ้าของยืนยันแล้ว (เหลือ idempotency key เก่า 3 แถว ซึ่งหมดอายุเองใน 7 วัน)
+- สร้าง R2 bucket `metafarm-next-media-dev` แล้ว (APAC, private, ปิด r2.dev URL) และตั้ง R2 API token ที่จำกัดเฉพาะ bucket นี้ใน `.dev.vars` แล้ว
+- ทดสอบ backup/restore กับ R2 และ Neon development จริงครบวงจรแล้ว: seed รัง+ผลผลิต+บันทึกตรวจพร้อมรูป PNG → `backup:dev` (ดาวน์โหลดรูปผ่าน S3 และตรวจ checksum) → `restore:dev --dry-run` → `--apply` ลง branch ที่ไม่ว่างถูกปฏิเสธ → ล้างข้อมูลและลบรูปใน R2 → `--apply` ลง branch ว่าง อัปโหลดรูปกลับและตรวจ SHA-256 ตรงกับต้นฉบับ → API เปิดรูปได้ (`200 image/png`). เสร็จแล้วล้างข้อมูลทดสอบและรูปใน dev ออกทั้งหมด
+- พบและแก้บั๊กระหว่างทดสอบ: `scripts/backup-shared.ts` อ่านตัวแปรที่ชื่อมีตัวเลข เช่น `R2_ACCESS_KEY_ID` ไม่ได้ (regex `[A-Z_]+`) ทำให้ `backup:dev`/`restore:dev` ใช้ credentials ใน `.dev.vars` ไม่ได้เลย; แก้เป็น `[A-Z][A-Z0-9_]*` พร้อมเทสต์
+- ตั้ง `OPENWEATHER_API_KEY` เป็น secret ของ Worker staging แล้ว และทดสอบกับ Worker บนเครื่องว่าดึงสภาพอากาศพิกัดฟาร์มได้ (`200`); พิกัด `13.310314, 101.111504` ตรงกับค่าเริ่มต้นใน `server/weather.ts` จึงไม่ต้องตั้ง `FARM_LAT`/`FARM_LON`
+- R2 bucket production `metafarm-next-media` ว่าง (0 object)
+- หมายเหตุ: `wrangler r2 bucket info` รายงาน `object_count` หน่วงจากความเป็นจริง (ตอนทดสอบ dev มีรูป 1 ไฟล์แต่รายงาน 0) จึงอย่าใช้ยืนยันว่า bucket ว่างหรือไม่ ให้ดูใน dashboard หรือใช้ S3 list
+
+เจ้าของแจ้งว่าดำเนินการแล้ว (ยังไม่ได้ตรวจจากระบบ):
+
+- ตั้ง Required reviewers ของ GitHub Environment `production`
+- ลบไฟล์รูปค้างใน R2 staging เอง (ตัวเลขใน `bucket info` ยังรายงาน 1 object แต่เชื่อถือไม่ได้ตามหมายเหตุข้างต้น)
+
+ยังไม่ได้ทำ / ยังไม่ได้ทดสอบ:
+
+- ยังไม่ได้ตั้ง `OPENWEATHER_API_KEY` ใน Worker production (รอเจ้าของอนุมัติ เพราะ `wrangler secret put` จะ deploy production ทันที)
+- ยังไม่ได้ทดสอบการอ่านรายการรูปแบบแบ่งหน้าเมื่อมีรูปเกิน 100 รูป และการลบรูปเก่าเมื่อเปลี่ยนรูปกับ R2 จริง
+- ยังไม่ได้ทดสอบ role `staff` แบบ end-to-end
+
 ## แยก staging ให้พร้อมใช้งาน
 
 1. ~~แยก Cloudflare Access app สำหรับ staging และใช้ policy `MetaFarm owner` เดิม~~ — เสร็จแล้ว

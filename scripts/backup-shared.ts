@@ -94,12 +94,16 @@ export async function verifyBackupFolder(root: string) {
   return { records, manifest };
 }
 
-async function devVars(): Promise<Record<string, string>> {
-  const content = await readFile(path.resolve(".dev.vars"), "utf8");
-  return Object.fromEntries(content.split(/\r?\n/).filter((line) => /^[A-Z_]+=/.test(line)).map((line) => {
+export function parseDevVars(content: string): Record<string, string> {
+  // Names may contain digits (R2_ACCESS_KEY_ID), so `[A-Z_]+` alone would silently skip them.
+  return Object.fromEntries(content.split(/\r?\n/).filter((line) => /^[A-Z][A-Z0-9_]*=/.test(line)).map((line) => {
     const separator = line.indexOf("=");
     return [line.slice(0, separator), line.slice(separator + 1).replace(/^['"]|['"]$/g, "")];
   }));
+}
+
+async function devVars(): Promise<Record<string, string>> {
+  return parseDevVars(await readFile(path.resolve(".dev.vars"), "utf8"));
 }
 
 export async function developmentR2(): Promise<{ client: S3Client; bucket: string }> {

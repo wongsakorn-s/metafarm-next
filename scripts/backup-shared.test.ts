@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { photoPath, sha256, verifyBackupFolder } from "./backup-shared";
+import { parseDevVars, photoPath, sha256, verifyBackupFolder } from "./backup-shared";
 
 const folders: string[] = [];
 afterEach(async () => {
@@ -57,6 +57,24 @@ describe("backup manifest", () => {
     expect((await verifyBackupFolder(root)).manifest.missingPhotos).toHaveLength(1);
     await write([]);
     await expect(verifyBackupFolder(root)).rejects.toThrow("ไม่มีใน manifest");
+  });
+
+  it("reads variable names that contain digits, such as the R2 credentials", () => {
+    const vars = parseDevVars([
+      "OWNER_EMAIL=owner@example.com",
+      "R2_BUCKET_NAME=metafarm-next-media-dev",
+      'R2_ACCESS_KEY_ID="abc"',
+      "R2_SECRET_ACCESS_KEY='def'",
+      "# comment=ignored",
+      "lowercase=ignored",
+      "",
+    ].join("\r\n"));
+    expect(vars).toEqual({
+      OWNER_EMAIL: "owner@example.com",
+      R2_BUCKET_NAME: "metafarm-next-media-dev",
+      R2_ACCESS_KEY_ID: "abc",
+      R2_SECRET_ACCESS_KEY: "def",
+    });
   });
 
   it("rejects unsafe R2 keys", () => {
