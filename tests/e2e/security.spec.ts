@@ -24,9 +24,16 @@ test("หน้า public และหลังบ้านไม่ละเม
     document.addEventListener("securitypolicyviolation", (event) =>
       console.error(`Content Security Policy: ${event.violatedDirective} ${event.blockedURI}`));
   });
+  // Render the weather card with an icon even when the Worker has no OpenWeather key (as in CI),
+  // so the icon's image source is checked against img-src.
+  await page.route("**/api/weather/current", (route) => route.fulfill({ json: {
+    timestamp: new Date().toISOString(), tempC: 30, humidity: 80, locationName: "ฟาร์ม",
+    description: "ฝนเบาๆ", icon: "10d", windSpeedMps: 1, cloudinessPct: 50, sourceName: "OpenWeather",
+  } }));
   for (const path of ["/", "/stingless-bee", "/stingless-bee-honey", "/contact", "/admin", "/admin#hives", "/admin#qr", "/admin#team"]) {
     await page.goto(path);
     await expect(page.locator("main")).toBeVisible();
+    if (path === "/admin") await expect(page.locator('img[src*="openweathermap.org"]')).toBeAttached();
     await page.waitForLoadState("networkidle");
   }
   expect(violations).toEqual([]);
